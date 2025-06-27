@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "projectName": {
+      "value": "igshop"
+    },
+    "environment": {
+      "value": "dev"
+    },
+    "location": {
+      "value": "eastus"
+    },
+    "postgresAdminUsername": {
+      "value": "igshop_admin"
+    },
+    "postgresAdminPassword": {
+      "value": "ChangeMe123!@#"
+    },
+    "openAiApiKey": {
+      "value": "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"
+    },
+    "metaAppId": {
+      "value": "1879578119651644"
+    },
+    "metaAppSecret": {
+      "value": "f79b3350f43751d6139e1b29a232cbf3"
+    }
+  }
+}
