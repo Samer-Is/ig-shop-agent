@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from './components/ui/toaster';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { Dashboard } from './pages/Dashboard';
-import { FunctionalDashboard } from './pages/FunctionalDashboard';
+import { SimpleDashboard } from './pages/SimpleDashboard';
 import { Catalog } from './pages/Catalog';
 import { Orders } from './pages/Orders';
 import { Conversations } from './pages/Conversations';
@@ -20,7 +20,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<DashboardLayout />}>
-            <Route index element={<FunctionalDashboard />} />
+            <Route index element={<SimpleDashboard />} />
             <Route path="mock-dashboard" element={<Dashboard />} />
             <Route path="catalog" element={<Catalog />} />
             <Route path="orders" element={<Orders />} />
