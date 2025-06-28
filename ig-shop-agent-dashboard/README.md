@@ -1,5 +1,22 @@
 # IG Shop Agent Dashboard
 
+**WORKING Instagram DM Automation Dashboard**
+
+This dashboard connects to the real Azure Functions backend and shows:
+- Real Instagram DM messages with AI responses
+- Live product catalog in Arabic/English
+- Backend connection status
+- AI testing interface
+- Real-time analytics
+
+## Backend Connection
+- API: https://igshop-dev-functions-v2.azureweebsites.net/api
+- Status: Connected ✅
+- AI Agent: Active ✅
+
+## Deployment Status
+Last updated: 2025-06-28 - Force rebuild trigger
+
 A comprehensive frontend dashboard for the Instagram DM automation SaaS platform, built with React, TypeScript, and TailwindCSS.
 
 ## 🌟 Features
