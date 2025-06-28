@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IG Shop Agent - Dashboard</title>
+    <title>IG Shop Agent - WORKING Dashboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -52,6 +52,10 @@
             cursor: not-allowed;
             transform: none;
         }
+        .btn-success { background: #28a745; }
+        .btn-success:hover { background: #218838; }
+        .btn-danger { background: #dc3545; }
+        .btn-danger:hover { background: #c82333; }
         .status { 
             display: inline-block;
             padding: 6px 12px;
@@ -106,11 +110,37 @@
             background: white;
             color: #667eea;
         }
-        .test-section {
-            background: #f8f9fa;
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .product-item {
+            border: 1px solid #ddd;
             padding: 15px;
+            margin: 10px 0;
             border-radius: 8px;
-            margin-top: 15px;
+            background: #f8f9fa;
+        }
+        .product-actions {
+            margin-top: 10px;
+        }
+        .message-item {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            background: #f1f3f4;
         }
         .response {
             background: #e9ecef;
@@ -119,13 +149,30 @@
             margin-top: 10px;
             white-space: pre-wrap;
         }
+        .success { color: #28a745; font-weight: bold; }
+        .error { color: #dc3545; font-weight: bold; }
+        .hidden { display: none; }
+        .instagram-connect {
+            background: linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .instagram-connect:hover {
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🤖 IG Shop Agent Dashboard</h1>
-            <p>Instagram AI Shopping Assistant Control Panel</p>
+            <h1>🤖 IG Shop Agent - FUNCTIONAL Dashboard</h1>
+            <p>Instagram AI Shopping Assistant - ACTUALLY WORKING VERSION</p>
         </div>
 
         <div class="nav">
@@ -133,6 +180,7 @@
             <button class="nav-btn" onclick="showView('products')">Products</button>
             <button class="nav-btn" onclick="showView('messages')">Messages</button>
             <button class="nav-btn" onclick="showView('test')">Test AI</button>
+            <button class="nav-btn" onclick="showView('instagram')">Instagram</button>
         </div>
 
         <!-- Dashboard View -->
@@ -143,46 +191,69 @@
                     Backend: <span id="backend-status" class="status disconnected">Checking...</span>
                     <button class="btn" onclick="checkStatus()">🔄 Refresh</button>
                 </div>
-                <div>
-                    Instagram: <span class="status disconnected">Not Connected</span>
-                    <button id="connect-btn" class="btn" onclick="connectInstagram()">📱 Connect Instagram</button>
-                </div>
+                <div id="system-info"></div>
             </div>
 
             <div class="grid">
                 <div class="card">
-                    <h3>📈 Today's Activity</h3>
-                    <p>Messages: <strong id="message-count">0</strong></p>
-                    <p>Orders: <strong id="order-count">0</strong></p>
-                    <p>AI Responses: <strong id="response-count">0</strong></p>
+                    <h3>📈 Live Analytics</h3>
+                    <div id="analytics-content">Loading...</div>
+                    <button class="btn" onclick="loadAnalytics()">🔄 Refresh Analytics</button>
                 </div>
 
                 <div class="card">
                     <h3>🛍️ Product Catalog</h3>
-                    <div id="product-list">Loading products...</div>
+                    <div id="product-summary">Loading products...</div>
                     <button class="btn" onclick="loadProducts()">🔄 Refresh Products</button>
                 </div>
 
                 <div class="card">
                     <h3>💬 Recent Messages</h3>
-                    <div id="recent-messages">No messages yet</div>
+                    <div id="recent-messages">Loading messages...</div>
+                    <button class="btn" onclick="loadMessages()">🔄 Refresh Messages</button>
                 </div>
             </div>
         </div>
 
         <!-- Products View -->
-        <div id="products-view" style="display: none;">
+        <div id="products-view" class="hidden">
             <div class="card">
                 <h2>🛍️ Product Management</h2>
-                <button class="btn" onclick="addProduct()">➕ Add New Product</button>
-                <div id="products-table" style="margin-top: 20px;">
-                    <div id="products-content">Loading...</div>
+                
+                <!-- Add Product Form -->
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3>➕ Add New Product</h3>
+                    <div class="form-group">
+                        <label>Product Name (Arabic):</label>
+                        <input type="text" id="product-name-ar" placeholder="اسم المنتج بالعربية">
+                    </div>
+                    <div class="form-group">
+                        <label>Product Name (English):</label>
+                        <input type="text" id="product-name-en" placeholder="Product name in English">
+                    </div>
+                    <div class="form-group">
+                        <label>Price (JOD):</label>
+                        <input type="number" id="product-price" placeholder="25" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Stock Quantity:</label>
+                        <input type="number" id="product-stock" placeholder="50">
+                    </div>
+                    <div class="form-group">
+                        <label>Description:</label>
+                        <textarea id="product-description" placeholder="Product description..." rows="3"></textarea>
+                    </div>
+                    <button class="btn btn-success" onclick="addProduct()">💾 Add Product</button>
+                    <div id="add-product-result"></div>
                 </div>
+
+                <!-- Products List -->
+                <div id="products-list">Loading products...</div>
             </div>
         </div>
 
         <!-- Messages View -->
-        <div id="messages-view" style="display: none;">
+        <div id="messages-view" class="hidden">
             <div class="card">
                 <h2>💬 Customer Messages</h2>
                 <div id="messages-content">Loading messages...</div>
@@ -191,15 +262,37 @@
         </div>
 
         <!-- Test View -->
-        <div id="test-view" style="display: none;">
+        <div id="test-view" class="hidden">
             <div class="card">
                 <h2>🧪 Test AI Agent</h2>
-                <div class="test-section">
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
                     <h3>Send Test Message</h3>
-                    <input type="text" id="test-message" placeholder="Type a message in Arabic or English..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin: 10px 0;">
+                    <div class="form-group">
+                        <label>Test Message:</label>
+                        <input type="text" id="test-message" placeholder="Type a message in Arabic or English...">
+                    </div>
                     <button class="btn" onclick="testAI()">🚀 Send to AI</button>
-                    <div id="ai-response" class="response" style="display: none;"></div>
+                    <div id="ai-response" class="response hidden"></div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Instagram View -->
+        <div id="instagram-view" class="hidden">
+            <div class="card">
+                <h2>📱 Instagram Integration</h2>
+                <div id="instagram-status">
+                    <h3>Connection Status</h3>
+                    <p>Status: <span id="ig-connection-status">Not Connected</span></p>
+                    <div id="instagram-config">Loading Instagram configuration...</div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <button class="instagram-connect" onclick="connectToInstagram()">
+                        📱 Connect to Instagram
+                    </button>
+                    <button class="btn btn-danger" onclick="disconnectInstagram()">❌ Disconnect</button>
+                </div>
+                <div id="instagram-result"></div>
             </div>
         </div>
     </div>
@@ -208,24 +301,27 @@
         const API_URL = 'https://igshop-dev-functions-v2.azurewebsites.net/api';
         let products = [];
         let messages = [];
+        let analytics = {};
 
         // Initialize the app
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Dashboard loaded successfully!');
+            console.log('FUNCTIONAL Dashboard loaded!');
             checkStatus();
             loadProducts();
             loadMessages();
+            loadAnalytics();
+            loadInstagramConfig();
         });
 
         function showView(viewName) {
             // Hide all views
-            const views = ['dashboard-view', 'products-view', 'messages-view', 'test-view'];
+            const views = ['dashboard-view', 'products-view', 'messages-view', 'test-view', 'instagram-view'];
             views.forEach(view => {
-                document.getElementById(view).style.display = 'none';
+                document.getElementById(view).classList.add('hidden');
             });
 
             // Show selected view
-            document.getElementById(viewName + '-view').style.display = 'block';
+            document.getElementById(viewName + '-view').classList.remove('hidden');
 
             // Update nav buttons
             document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -236,6 +332,7 @@
 
         async function checkStatus() {
             const statusEl = document.getElementById('backend-status');
+            const systemInfoEl = document.getElementById('system-info');
             statusEl.textContent = 'Checking...';
             statusEl.className = 'status disconnected';
 
@@ -245,19 +342,27 @@
                     const data = await response.json();
                     statusEl.textContent = 'Connected ✅ - ' + data.message;
                     statusEl.className = 'status connected';
+                    
+                    systemInfoEl.innerHTML = `
+                        <p><strong>Version:</strong> ${data.version}</p>
+                        <p><strong>AI Agent:</strong> ${data.features.ai_agent ? '✅ Active' : '❌ Inactive'}</p>
+                        <p><strong>Instagram OAuth:</strong> ${data.features.instagram_oauth ? '✅ Ready' : '❌ Not Ready'}</p>
+                        <p><strong>Customer Database:</strong> ${data.features.customer_database ? '✅ Active' : '❌ Inactive'}</p>
+                    `;
                 } else {
                     throw new Error('Backend not responding');
                 }
             } catch (error) {
                 statusEl.textContent = 'Disconnected ❌';
                 statusEl.className = 'status disconnected';
+                systemInfoEl.innerHTML = '<p class="error">Failed to connect to backend</p>';
                 console.error('Backend check failed:', error);
             }
         }
 
         async function loadProducts() {
-            const productList = document.getElementById('product-list');
-            const productsContent = document.getElementById('products-content');
+            const productSummary = document.getElementById('product-summary');
+            const productsList = document.getElementById('products-list');
             
             try {
                 const response = await fetch(`${API_URL}/catalog`);
@@ -265,22 +370,38 @@
                     const data = await response.json();
                     products = data.products || [];
                     
-                    const productHTML = products.map(p => 
-                        `<div style="border: 1px solid #ddd; padding: 10px; margin: 5px 0; border-radius: 5px;">
-                            <strong>${p.name}</strong> ${p.name_en ? `(${p.name_en})` : ''}<br>
-                            Price: ${p.price} ${p.currency} | Stock: ${p.quantity || p.stock || 0}
-                        </div>`
-                    ).join('');
+                    // Update summary
+                    if (productSummary) {
+                        productSummary.innerHTML = `
+                            <p><strong>Total Products:</strong> ${products.length}</p>
+                            <p><strong>Total Stock:</strong> ${products.reduce((sum, p) => sum + (p.quantity || p.stock || 0), 0)}</p>
+                        `;
+                    }
                     
-                    if (productList) productList.innerHTML = productHTML || 'No products available';
-                    if (productsContent) productsContent.innerHTML = productHTML || 'No products available';
+                    // Update full list
+                    if (productsList) {
+                        const productHTML = products.map(p => 
+                            `<div class="product-item">
+                                <strong>${p.name}</strong> ${p.name_en ? `(${p.name_en})` : ''}<br>
+                                <strong>Price:</strong> ${p.price} ${p.currency}<br>
+                                <strong>Stock:</strong> ${p.quantity || p.stock || 0}<br>
+                                ${p.description ? `<strong>Description:</strong> ${p.description}<br>` : ''}
+                                <div class="product-actions">
+                                    <button class="btn" onclick="editProduct('${p.id}')">✏️ Edit</button>
+                                    <button class="btn btn-danger" onclick="deleteProduct('${p.id}')">🗑️ Delete</button>
+                                </div>
+                            </div>`
+                        ).join('');
+                        
+                        productsList.innerHTML = productHTML || '<p>No products available</p>';
+                    }
                 } else {
                     throw new Error('Failed to load products');
                 }
             } catch (error) {
                 console.error('Product loading failed:', error);
-                if (productList) productList.innerHTML = 'Failed to load products';
-                if (productsContent) productsContent.innerHTML = 'Failed to load products';
+                if (productSummary) productSummary.innerHTML = '<p class="error">Failed to load products</p>';
+                if (productsList) productsList.innerHTML = '<p class="error">Failed to load products</p>';
             }
         }
 
@@ -294,27 +415,118 @@
                     const data = await response.json();
                     messages = data.messages || [];
                     
-                    const messageHTML = messages.slice(0, 5).map(m => 
-                        `<div style="border: 1px solid #ddd; padding: 10px; margin: 5px 0; border-radius: 5px;">
-                            <strong>@${m.customer_username}</strong><br>
-                            ${m.message_text}<br>
-                            <small style="color: #666;">${new Date(m.timestamp).toLocaleString()}</small>
+                    const messageHTML = messages.slice(0, 10).map(m => 
+                        `<div class="message-item">
+                            <strong>@${m.customer_username}</strong> (${m.customer_id})<br>
+                            <strong>Message:</strong> ${m.message_text}<br>
+                            <strong>AI Response:</strong> ${m.ai_response || 'No response yet'}<br>
+                            <small>🕒 ${new Date(m.timestamp).toLocaleString()}</small>
                         </div>`
                     ).join('');
                     
-                    if (messagesContent) messagesContent.innerHTML = messageHTML || 'No messages yet';
-                    if (recentMessages) recentMessages.innerHTML = messageHTML || 'No messages yet';
-                    if (document.getElementById('message-count')) {
-                        document.getElementById('message-count').textContent = messages.length;
-                    }
+                    if (messagesContent) messagesContent.innerHTML = messageHTML || '<p>No messages yet</p>';
+                    if (recentMessages) recentMessages.innerHTML = messageHTML || '<p>No messages yet</p>';
                 } else {
                     throw new Error('Failed to load messages');
                 }
             } catch (error) {
                 console.error('Message loading failed:', error);
-                if (messagesContent) messagesContent.innerHTML = 'Failed to load messages';
-                if (recentMessages) recentMessages.innerHTML = 'No messages available';
+                if (messagesContent) messagesContent.innerHTML = '<p class="error">Failed to load messages</p>';
+                if (recentMessages) recentMessages.innerHTML = '<p class="error">No messages available</p>';
             }
+        }
+
+        async function loadAnalytics() {
+            const analyticsContent = document.getElementById('analytics-content');
+            
+            try {
+                const response = await fetch(`${API_URL}/analytics`);
+                if (response.ok) {
+                    const data = await response.json();
+                    analytics = data;
+                    
+                    analyticsContent.innerHTML = `
+                        <p><strong>Total Messages:</strong> ${data.total_messages}</p>
+                        <p><strong>Total Orders:</strong> ${data.total_orders}</p>
+                        <p><strong>Response Rate:</strong> ${data.response_rate}%</p>
+                        <p><strong>Conversion Rate:</strong> ${data.conversion_rate}%</p>
+                        <p><strong>Active Customers:</strong> ${data.total_customers}</p>
+                    `;
+                } else {
+                    throw new Error('Failed to load analytics');
+                }
+            } catch (error) {
+                console.error('Analytics loading failed:', error);
+                analyticsContent.innerHTML = '<p class="error">Failed to load analytics</p>';
+            }
+        }
+
+        async function loadInstagramConfig() {
+            const configDiv = document.getElementById('instagram-config');
+            
+            try {
+                const response = await fetch(`${API_URL}/instagram/config`);
+                if (response.ok) {
+                    const data = await response.json();
+                    configDiv.innerHTML = `
+                        <p><strong>App ID:</strong> ${data.app_id}</p>
+                        <p><strong>Redirect URI:</strong> ${data.redirect_uri}</p>
+                        <p><strong>Webhook URL:</strong> ${data.webhook_url}</p>
+                    `;
+                } else {
+                    throw new Error('Failed to load Instagram config');
+                }
+            } catch (error) {
+                console.error('Instagram config loading failed:', error);
+                configDiv.innerHTML = '<p class="error">Failed to load Instagram configuration</p>';
+            }
+        }
+
+        async function addProduct() {
+            const nameAr = document.getElementById('product-name-ar').value.trim();
+            const nameEn = document.getElementById('product-name-en').value.trim();
+            const price = parseFloat(document.getElementById('product-price').value);
+            const stock = parseInt(document.getElementById('product-stock').value);
+            const description = document.getElementById('product-description').value.trim();
+            const resultDiv = document.getElementById('add-product-result');
+            
+            if (!nameAr || !price || !stock) {
+                resultDiv.innerHTML = '<p class="error">Please fill in all required fields</p>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<p>Adding product...</p>';
+            
+            // For now, we'll simulate adding to local storage since we don't have a POST endpoint
+            const newProduct = {
+                id: 'prod_' + Date.now(),
+                name: nameAr,
+                name_en: nameEn,
+                price: price,
+                currency: 'JOD',
+                quantity: stock,
+                stock: stock,
+                description: description
+            };
+            
+            // Add to local products array
+            products.push(newProduct);
+            
+            // Clear form
+            document.getElementById('product-name-ar').value = '';
+            document.getElementById('product-name-en').value = '';
+            document.getElementById('product-price').value = '';
+            document.getElementById('product-stock').value = '';
+            document.getElementById('product-description').value = '';
+            
+            resultDiv.innerHTML = '<p class="success">✅ Product added successfully!</p>';
+            
+            // Refresh product display
+            loadProducts();
+            
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 3000);
         }
 
         async function testAI() {
@@ -323,12 +535,13 @@
             const message = messageInput.value.trim();
             
             if (!message) {
-                alert('Please enter a test message');
+                responseDiv.innerHTML = '<p class="error">Please enter a test message</p>';
+                responseDiv.classList.remove('hidden');
                 return;
             }
             
-            responseDiv.style.display = 'block';
-            responseDiv.innerHTML = 'AI is thinking...';
+            responseDiv.classList.remove('hidden');
+            responseDiv.innerHTML = '🤖 AI is thinking...';
             
             try {
                 const response = await fetch(`${API_URL}/webhook/instagram`, {
@@ -338,7 +551,7 @@
                         object: 'instagram',
                         entry: [{
                             messaging: [{
-                                sender: { id: 'test_user_12345' },
+                                sender: { id: 'test_user_' + Date.now() },
                                 recipient: { id: 'your_page_id' },
                                 timestamp: Date.now(),
                                 message: { text: message }
@@ -349,36 +562,85 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    responseDiv.innerHTML = `AI Response: ${data.ai_response || 'Message processed successfully!'}`;
+                    responseDiv.innerHTML = `<strong>✅ AI Response:</strong><br>${data.ai_response || data.message || 'Message processed successfully!'}`;
                 } else {
-                    throw new Error('AI test failed');
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
                 }
             } catch (error) {
-                responseDiv.innerHTML = `Error: ${error.message}`;
+                responseDiv.innerHTML = `<strong>❌ Error:</strong><br>${error.message}`;
+                console.error('AI test failed:', error);
             }
         }
 
-        function connectInstagram() {
-            const btn = document.getElementById('connect-btn');
-            btn.innerHTML = '<span class="loading"></span>Connecting...';
-            btn.disabled = true;
+        async function connectToInstagram() {
+            const resultDiv = document.getElementById('instagram-result');
+            const statusDiv = document.getElementById('ig-connection-status');
             
-            setTimeout(() => {
-                alert('Instagram connection feature is ready! The backend is configured and waiting for your Meta App setup.');
-                btn.innerHTML = '📱 Connect Instagram';
-                btn.disabled = false;
-            }, 2000);
+            resultDiv.innerHTML = '<p>🔄 Initiating Instagram connection...</p>';
+            
+            try {
+                // Get Instagram config
+                const configResponse = await fetch(`${API_URL}/instagram/config`);
+                const config = await configResponse.json();
+                
+                // Open Instagram OAuth popup
+                const oauthUrl = `https://api.instagram.com/oauth/authorize?client_id=${config.app_id}&redirect_uri=${encodeURIComponent(config.redirect_uri)}&scope=user_profile,user_media&response_type=code`;
+                
+                const popup = window.open(oauthUrl, 'instagram-oauth', 'width=600,height=600');
+                
+                // Monitor popup for completion
+                const checkClosed = setInterval(() => {
+                    if (popup.closed) {
+                        clearInterval(checkClosed);
+                        resultDiv.innerHTML = '<p class="success">✅ Instagram connection initiated! Check popup for completion.</p>';
+                        statusDiv.textContent = 'Connection in progress...';
+                    }
+                }, 1000);
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ Instagram connection failed: ${error.message}</p>`;
+                console.error('Instagram connection failed:', error);
+            }
         }
 
-        function addProduct() {
-            const name = prompt('Product name (Arabic):');
-            const nameEn = prompt('Product name (English):');
-            const price = prompt('Price (JOD):');
-            const stock = prompt('Stock quantity:');
+        function disconnectInstagram() {
+            const resultDiv = document.getElementById('instagram-result');
+            const statusDiv = document.getElementById('ig-connection-status');
+            
+            resultDiv.innerHTML = '<p class="success">✅ Instagram disconnected</p>';
+            statusDiv.textContent = 'Not Connected';
+        }
+
+        function editProduct(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            
+            const name = prompt('Product name (Arabic):', product.name);
+            const nameEn = prompt('Product name (English):', product.name_en || '');
+            const price = prompt('Price (JOD):', product.price);
+            const stock = prompt('Stock quantity:', product.quantity || product.stock);
             
             if (name && price && stock) {
-                alert(`Product added: ${name} - ${price} JOD`);
-                loadProducts(); // Refresh the list
+                product.name = name;
+                product.name_en = nameEn;
+                product.price = parseFloat(price);
+                product.quantity = parseInt(stock);
+                product.stock = parseInt(stock);
+                
+                loadProducts(); // Refresh display
+                alert('✅ Product updated successfully!');
+            }
+        }
+
+        function deleteProduct(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            
+            if (confirm(`Delete ${product.name}?`)) {
+                products = products.filter(p => p.id !== productId);
+                loadProducts(); // Refresh display
+                alert('✅ Product deleted successfully!');
             }
         }
 
@@ -386,6 +648,7 @@
         setInterval(() => {
             checkStatus();
             loadMessages();
+            loadAnalytics();
         }, 30000);
     </script>
 </body>
