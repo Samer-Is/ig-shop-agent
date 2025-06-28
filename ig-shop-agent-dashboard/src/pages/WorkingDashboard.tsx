@@ -5,6 +5,7 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { realApiService } from '../services/apiService';
 import { 
   Instagram, 
   MessageCircle, 
@@ -57,6 +58,8 @@ export function WorkingDashboard() {
   const [testMessage, setTestMessage] = useState('');
   const [testResponse, setTestResponse] = useState('');
   const [testLoading, setTestLoading] = useState(false);
+  const [instagramConnected, setInstagramConnected] = useState(false);
+  const [instagramConfig, setInstagramConfig] = useState<any>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   // Load all data
@@ -140,11 +143,67 @@ export function WorkingDashboard() {
     }
   };
 
+  // Instagram integration functions
+  const loadInstagramConfig = async () => {
+    try {
+      const configResponse = await fetch(`${API_URL}/instagram/config`);
+      if (configResponse.ok) {
+        const configData = await configResponse.json();
+        setInstagramConfig(configData);
+      }
+      
+      const statusResponse = await realApiService.getInstagramStatus();
+      if (statusResponse.success && statusResponse.data) {
+        setInstagramConnected(statusResponse.data.connected);
+      }
+    } catch (error) {
+      console.error('Failed to load Instagram config:', error);
+    }
+  };
+
+  const connectInstagram = () => {
+    if (!instagramConfig) return;
+    
+    const instagramAuthUrl = `https://api.instagram.com/oauth/authorize?client_id=${instagramConfig.app_id}&redirect_uri=${encodeURIComponent(instagramConfig.redirect_uri)}&scope=user_profile,user_media&response_type=code`;
+    
+    // Open Instagram OAuth in popup
+    const popup = window.open(
+      instagramAuthUrl,
+      'instagram-auth',
+      'width=600,height=600,scrollbars=yes,resizable=yes'
+    );
+
+    // Listen for OAuth response
+    const checkClosed = setInterval(() => {
+      if (popup?.closed) {
+        clearInterval(checkClosed);
+        loadData(); // Refresh data after connection
+        loadInstagramConfig(); // Refresh Instagram status
+      }
+    }, 1000);
+  };
+
+  const disconnectInstagram = async () => {
+    try {
+      const response = await realApiService.disconnectInstagram();
+      if (response.success) {
+        setInstagramConnected(false);
+        loadData(); // Refresh data
+      }
+    } catch (error) {
+      console.error('Failed to disconnect Instagram:', error);
+    }
+  };
+
   useEffect(() => {
     loadData();
+    loadInstagramConfig();
     
     // Auto-refresh every 30 seconds
-    const interval = setInterval(loadData, 30000);
+    const interval = setInterval(() => {
+      loadData();
+      loadInstagramConfig();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -359,33 +418,97 @@ export function WorkingDashboard() {
         </CardContent>
       </Card>
 
-      {/* Instagram Integration Status */}
+      {/* Instagram Integration */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Instagram className="h-5 w-5 text-pink-600" />
             Instagram Integration
           </CardTitle>
+          <CardDescription>
+            Connect your Instagram account to enable DM automation
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span>Webhook Endpoint</span>
-              <Badge variant="default">Active</Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>AI Agent</span>
-              <Badge variant={backendConnected ? "default" : "secondary"}>
-                {backendConnected ? "Ready" : "Offline"}
+          <div className="space-y-4">
+            {/* Connection Status */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${instagramConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
+                <span className="font-semibold">
+                  {instagramConnected ? 'Connected to Instagram' : 'Not Connected'}
+                </span>
+              </div>
+              <Badge variant={instagramConnected ? "default" : "secondary"}>
+                {instagramConnected ? "Active" : "Inactive"}
               </Badge>
             </div>
-            <div className="flex items-center justify-between">
-              <span>Message Processing</span>
-              <Badge variant="default">Enabled</Badge>
+
+            {/* Connection Button */}
+            <div className="flex items-center gap-3">
+              {instagramConnected ? (
+                <Button 
+                  onClick={disconnectInstagram} 
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <Instagram className="h-4 w-4" />
+                  Disconnect Instagram
+                </Button>
+              ) : (
+                <Button 
+                  onClick={connectInstagram} 
+                  disabled={!instagramConfig || !backendConnected}
+                  className="flex items-center gap-2"
+                >
+                  <Instagram className="h-4 w-4" />
+                  Connect to Instagram
+                </Button>
+              )}
+              
+              <Button 
+                onClick={loadInstagramConfig} 
+                variant="outline" 
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Load Config
+              </Button>
             </div>
-            <div className="text-sm text-gray-600">
-              <p><strong>Webhook URL:</strong> {API_URL}/webhook/instagram</p>
-              <p><strong>Verify Token:</strong> igshop_webhook_verify_2024</p>
+
+            {/* Configuration Details */}
+            {instagramConfig && (
+              <div className="text-sm text-gray-600 border-t pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p><strong>App ID:</strong> {instagramConfig.app_id}</p>
+                    <p><strong>Status:</strong> {instagramConfig.status}</p>
+                  </div>
+                  <div>
+                    <p><strong>Webhook URL:</strong></p>
+                    <p className="font-mono text-xs break-all">{instagramConfig.webhook_url}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* System Status */}
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <span>AI Agent</span>
+                <Badge variant={backendConnected ? "default" : "secondary"}>
+                  {backendConnected ? "Ready" : "Offline"}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Webhook Endpoint</span>
+                <Badge variant="default">Active</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Message Processing</span>
+                <Badge variant="default">Enabled</Badge>
+              </div>
             </div>
           </div>
         </CardContent>
