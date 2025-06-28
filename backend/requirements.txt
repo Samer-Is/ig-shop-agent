@@ -1,1 +1,19 @@
-azure-functions 
+﻿# Azure Functions Core Dependencies
+azure-functions>=1.18.0
+azure-functions-worker>=1.0.0
+
+# HTTP Client for API calls
+requests>=2.31.0
+
+# JSON and data processing (built-in to Python)
+# datetime, re, os, logging are built-in
+
+# Optional: For more advanced AI features (uncomment if using OpenAI)
+# openai>=1.0.0
+
+# Optional: For database storage (uncomment if using Azure Cosmos DB)
+# azure-cosmos>=4.5.1
+
+# Optional: For enhanced analytics (uncomment if needed)
+# pandas>=2.0.0
+# numpy>=1.24.0
