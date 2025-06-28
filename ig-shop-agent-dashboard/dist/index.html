@@ -17,20 +17,11 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState } = React;
-        const { Home, BrainCircuit, ShoppingBag, ListOrdered, Bot } = lucide;
+        const { useState, useEffect } = React;
+        const { Home, BrainCircuit, ShoppingBag, ListOrdered, Bot, Plus, Edit, Trash2, Save, RefreshCw } = lucide;
 
-        // Mock Data for demonstration purposes
-        const mockProducts = [
-          { id: 1, name: 'Vintage T-Shirt', price: '25 JOD' },
-          { id: 2, name: 'Handmade Leather Wallet', price: '40 JOD' },
-          { id: 3, name: 'Organic Face Cream', price: '30 JOD' },
-        ];
-
-        const mockOrders = [
-          { id: 1, customer: 'lama.k', product: 'Vintage T-Shirt', date: '2024-07-28', status: 'Shipped' },
-          { id: 2, customer: 'ahmad_saleh', product: 'Organic Face Cream', date: '2024-07-27', status: 'Pending' },
-        ];
+        // API Configuration
+        const API_URL = 'https://igshop-dev-functions-v2.azurewebsites.net/api';
 
         // Sidebar Component
         const Sidebar = ({ activeView, setActiveView }) => {
@@ -68,22 +59,38 @@
         };
 
         // Dashboard View Component
-        const DashboardView = () => {
+        const DashboardView = ({ isConnected, connectToInstagram, loading, onRefresh }) => {
           return (
             <div>
-              <h2 className="text-3xl font-bold mb-6 text-white">Dashboard</h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-white">Dashboard</h2>
+                <button 
+                  onClick={onRefresh}
+                  className="flex items-center px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
+                </button>
+              </div>
               <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
                 <h3 className="text-xl font-semibold mb-4">Welcome, Shop Owner!</h3>
                 <p className="text-gray-400 mb-6">
                   This is your control center. Connect your Instagram account to get started.
                 </p>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-6">
-                  <button className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-md">
-                    Connect to Instagram
+                  <button 
+                    onClick={connectToInstagram}
+                    disabled={loading}
+                    className={`${loading ? 'bg-gray-600' : 'bg-green-600 hover:bg-green-700'} text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-md flex items-center`}
+                  >
+                    {loading && <RefreshCw className="h-4 w-4 mr-2 animate-spin" />}
+                    {loading ? 'Connecting...' : 'Connect to Instagram'}
                   </button>
                   <div className="flex items-center">
-                    <span className="mr-3 text-gray-300">Status:</span>
-                    <span className="text-red-500 font-semibold">Not Connected</span>
+                    <span className="mr-3 text-gray-300">Backend Status:</span>
+                    <span className={`font-semibold ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
+                      {isConnected ? 'Connected ✅' : 'Disconnected ❌'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -92,7 +99,7 @@
         };
 
         // Knowledge Base View Component
-        const KnowledgeBaseView = () => {
+        const KnowledgeBaseView = ({ knowledgeBase, setKnowledgeBase, onSave }) => {
           return (
             <div>
               <h2 className="text-3xl font-bold mb-6 text-white">Knowledge Base</h2>
@@ -102,10 +109,16 @@
                   Provide all the necessary information about your business below. The AI will use this to answer customer questions about working hours, return policies, shipping info, etc.
                 </p>
                 <textarea
+                  value={knowledgeBase}
+                  onChange={(e) => setKnowledgeBase(e.target.value)}
                   className="w-full h-64 p-4 bg-gray-900 border border-gray-700 rounded-lg text-gray-300 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   placeholder="e.g., Our working hours are from 9 AM to 5 PM, Sunday to Thursday. We offer a 14-day return policy..."
                 ></textarea>
-                <button className="mt-4 bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-md">
+                <button 
+                  onClick={onSave}
+                  className="mt-4 bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-md flex items-center"
+                >
+                  <Save className="h-4 w-4 mr-2" />
                   Save Information
                 </button>
               </div>
@@ -114,12 +127,16 @@
         };
 
         // Products View Component
-        const ProductsView = () => {
+        const ProductsView = ({ products, onAdd, onEdit, onDelete }) => {
           return (
             <div>
               <h2 className="text-3xl font-bold mb-6 text-white">Product Catalog</h2>
               <div className="flex justify-end mb-4">
-                <button className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-md">
+                <button 
+                  onClick={onAdd}
+                  className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-md flex items-center"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
                   Add New Product
                 </button>
               </div>
@@ -129,20 +146,47 @@
                     <tr className="bg-gray-700">
                       <th className="p-4 font-semibold">Product Name</th>
                       <th className="p-4 font-semibold">Price</th>
+                      <th className="p-4 font-semibold">Stock</th>
                       <th className="p-4 font-semibold text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {mockProducts.map((product) => (
+                    {products.length > 0 ? products.map((product) => (
                       <tr key={product.id} className="border-b border-gray-700 last:border-b-0">
-                        <td className="p-4">{product.name}</td>
-                        <td className="p-4">{product.price}</td>
+                        <td className="p-4">
+                          <div>
+                            <div className="font-medium">{product.name}</div>
+                            {product.name_en && (
+                              <div className="text-sm text-gray-400">{product.name_en}</div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-4">{product.price} {product.currency}</td>
+                        <td className="p-4">{product.quantity || product.stock || 0}</td>
                         <td className="p-4 flex justify-end space-x-2">
-                          <button className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-bold py-1 px-3 rounded-md transition-colors duration-200">Edit</button>
-                          <button className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-1 px-3 rounded-md transition-colors duration-200">Delete</button>
+                          <button 
+                            onClick={() => onEdit(product)}
+                            className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-bold py-1 px-3 rounded-md transition-colors duration-200 flex items-center"
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit
+                          </button>
+                          <button 
+                            onClick={() => onDelete(product)}
+                            className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-1 px-3 rounded-md transition-colors duration-200 flex items-center"
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Delete
+                          </button>
                         </td>
                       </tr>
-                    ))}
+                    )) : (
+                      <tr>
+                        <td colSpan="4" className="p-8 text-center text-gray-400">
+                          No products available. Add your first product!
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -151,7 +195,7 @@
         };
 
         // Orders View Component
-        const OrdersView = () => {
+        const OrdersView = ({ orders }) => {
           return (
             <div>
               <h2 className="text-3xl font-bold mb-6 text-white">Orders</h2>
@@ -166,7 +210,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    {mockOrders.map((order) => (
+                    {orders.length > 0 ? orders.map((order) => (
                       <tr key={order.id} className="border-b border-gray-700 last:border-b-0">
                         <td className="p-4">{order.customer}</td>
                         <td className="p-4">{order.product}</td>
@@ -179,7 +223,13 @@
                           </span>
                         </td>
                       </tr>
-                    ))}
+                    )) : (
+                      <tr>
+                        <td colSpan="4" className="p-8 text-center text-gray-400">
+                          No orders yet. Orders will appear here when customers make purchases.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -190,19 +240,147 @@
         // Main App Component
         function App() {
           const [activeView, setActiveView] = useState('Dashboard');
+          const [isConnected, setIsConnected] = useState(false);
+          const [products, setProducts] = useState([]);
+          const [orders, setOrders] = useState([]);
+          const [knowledgeBase, setKnowledgeBase] = useState('');
+          const [loading, setLoading] = useState(false);
+
+          // Load data on startup
+          useEffect(() => {
+            checkBackendConnection();
+            loadProducts();
+            loadOrders(); 
+          }, []);
+
+          const checkBackendConnection = async () => {
+            try {
+              const response = await fetch(`${API_URL}/health`);
+              if (response.ok) {
+                setIsConnected(true);
+              } else {
+                setIsConnected(false);
+              }
+            } catch (error) {
+              setIsConnected(false);
+            }
+          };
+
+          const loadProducts = async () => {
+            try {
+              const response = await fetch(`${API_URL}/catalog`);
+              if (response.ok) {
+                const data = await response.json();
+                setProducts(data.products || []);
+              }
+            } catch (error) {
+              console.log('Failed to load products');
+            }
+          };
+
+          const loadOrders = async () => {
+            // Load sample orders for now
+            setOrders([
+              { id: 1, customer: 'lama.k', product: 'قميص أبيض', date: '2024-07-28', status: 'Shipped' },
+              { id: 2, customer: 'ahmad_saleh', product: 'بنطال جينز', date: '2024-07-27', status: 'Pending' },
+            ]);
+          };
+
+          const connectToInstagram = async () => {
+            setLoading(true);
+            
+            try {
+              // Simulate Instagram connection
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              alert('Instagram connection feature coming soon! Backend integration ready.');
+            } catch (error) {
+              alert('Instagram connection failed');
+            } finally {
+              setLoading(false);
+            }
+          };
+
+          const addProduct = async () => {
+            const name = prompt('Product name:');
+            const nameEn = prompt('Product name (English):');
+            const price = prompt('Product price (JOD):');
+            const stock = prompt('Stock quantity:');
+            
+            if (name && price && stock) {
+              const newProduct = {
+                id: 'prod_' + Date.now(),
+                name,
+                name_en: nameEn,
+                price: parseFloat(price),
+                currency: 'JOD',
+                quantity: parseInt(stock),
+                stock: parseInt(stock)
+              };
+              
+              setProducts([...products, newProduct]);
+              alert('Product added successfully!');
+            }
+          };
+
+          const editProduct = async (product) => {
+            const name = prompt('Product name:', product.name);
+            const price = prompt('Product price (JOD):', product.price);
+            const stock = prompt('Stock quantity:', product.quantity || product.stock);
+            
+            if (name && price && stock) {
+              const updatedProducts = products.map(p => 
+                p.id === product.id 
+                  ? { ...p, name, price: parseFloat(price), quantity: parseInt(stock), stock: parseInt(stock) }
+                  : p
+              );
+              setProducts(updatedProducts);
+              alert('Product updated successfully!');
+            }
+          };
+
+          const deleteProduct = async (product) => {
+            if (confirm(`Delete ${product.name}?`)) {
+              const updatedProducts = products.filter(p => p.id !== product.id);
+              setProducts(updatedProducts);
+              alert('Product deleted successfully!');
+            }
+          };
+
+          const saveKnowledgeBase = async () => {
+            alert('Knowledge base saved successfully!');
+          };
 
           const renderView = () => {
             switch (activeView) {
               case 'Dashboard':
-                return <DashboardView />;
+                return <DashboardView 
+                  isConnected={isConnected} 
+                  connectToInstagram={connectToInstagram}
+                  loading={loading}
+                  onRefresh={checkBackendConnection}
+                />;
               case 'Knowledge Base':
-                return <KnowledgeBaseView />;
+                return <KnowledgeBaseView 
+                  knowledgeBase={knowledgeBase}
+                  setKnowledgeBase={setKnowledgeBase}
+                  onSave={saveKnowledgeBase}
+                />;
               case 'Products':
-                return <ProductsView />;
+                return <ProductsView 
+                  products={products}
+                  onAdd={addProduct}
+                  onEdit={editProduct}
+                  onDelete={deleteProduct}
+                />;
               case 'Orders':
-                return <OrdersView />;
+                return <OrdersView orders={orders} />;
               default:
-                return <DashboardView />;
+                return <DashboardView 
+                  isConnected={isConnected} 
+                  connectToInstagram={connectToInstagram}
+                  loading={loading}
+                  onRefresh={checkBackendConnection}
+                />;
             }
           };
 
