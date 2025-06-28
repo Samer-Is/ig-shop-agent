@@ -38,6 +38,7 @@ import {
   Webhook,
   Zap
 } from 'lucide-react';
+import { ConnectionStatus } from '../components/ConnectionStatus';
 
 export function Settings() {
   const [showApiKey, setShowApiKey] = useState(false);
@@ -101,6 +102,9 @@ export function Settings() {
           Save All Changes
         </Button>
       </div>
+
+      {/* Connection Status */}
+      <ConnectionStatus />
 
       <Tabs defaultValue="notifications" className="space-y-6">
         <TabsList className="grid w-full grid-cols-5">
