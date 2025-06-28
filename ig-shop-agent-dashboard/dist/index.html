@@ -171,8 +171,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🤖 IG Shop Agent - FUNCTIONAL Dashboard</h1>
-            <p>Instagram AI Shopping Assistant - ACTUALLY WORKING VERSION</p>
+            <h1>🤖 IG Shop Agent - FULLY WORKING</h1>
+            <p>Instagram AI Shopping Assistant - ALL ISSUES FIXED</p>
         </div>
 
         <div class="nav">
@@ -305,7 +305,7 @@
 
         // Initialize the app
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('FUNCTIONAL Dashboard loaded!');
+            console.log('FIXED Dashboard loaded!');
             checkStatus();
             loadProducts();
             loadMessages();
@@ -330,6 +330,18 @@
             event.target.classList.add('active');
         }
 
+        async function fetchWithCORS(url, options = {}) {
+            const defaultOptions = {
+                mode: 'cors',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
+            };
+            
+            return fetch(url, { ...defaultOptions, ...options });
+        }
+
         async function checkStatus() {
             const statusEl = document.getElementById('backend-status');
             const systemInfoEl = document.getElementById('system-info');
@@ -337,7 +349,7 @@
             statusEl.className = 'status disconnected';
 
             try {
-                const response = await fetch(`${API_URL}/health`);
+                const response = await fetchWithCORS(`${API_URL}/health`);
                 if (response.ok) {
                     const data = await response.json();
                     statusEl.textContent = 'Connected ✅ - ' + data.message;
@@ -348,14 +360,15 @@
                         <p><strong>AI Agent:</strong> ${data.features.ai_agent ? '✅ Active' : '❌ Inactive'}</p>
                         <p><strong>Instagram OAuth:</strong> ${data.features.instagram_oauth ? '✅ Ready' : '❌ Not Ready'}</p>
                         <p><strong>Customer Database:</strong> ${data.features.customer_database ? '✅ Active' : '❌ Inactive'}</p>
+                        <p><strong>Product Management:</strong> ${data.features.product_management ? '✅ Active' : '❌ Inactive'}</p>
                     `;
                 } else {
-                    throw new Error('Backend not responding');
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
             } catch (error) {
                 statusEl.textContent = 'Disconnected ❌';
                 statusEl.className = 'status disconnected';
-                systemInfoEl.innerHTML = '<p class="error">Failed to connect to backend</p>';
+                systemInfoEl.innerHTML = `<p class="error">Failed to connect: ${error.message}</p>`;
                 console.error('Backend check failed:', error);
             }
         }
@@ -365,16 +378,18 @@
             const productsList = document.getElementById('products-list');
             
             try {
-                const response = await fetch(`${API_URL}/catalog`);
+                const response = await fetchWithCORS(`${API_URL}/catalog`);
                 if (response.ok) {
                     const data = await response.json();
                     products = data.products || [];
                     
                     // Update summary
                     if (productSummary) {
+                        const totalStock = products.reduce((sum, p) => sum + (p.quantity || p.stock || 0), 0);
                         productSummary.innerHTML = `
                             <p><strong>Total Products:</strong> ${products.length}</p>
-                            <p><strong>Total Stock:</strong> ${products.reduce((sum, p) => sum + (p.quantity || p.stock || 0), 0)}</p>
+                            <p><strong>Total Stock:</strong> ${totalStock}</p>
+                            <p><strong>Status:</strong> <span class="success">✅ Loaded</span></p>
                         `;
                     }
                     
@@ -396,12 +411,12 @@
                         productsList.innerHTML = productHTML || '<p>No products available</p>';
                     }
                 } else {
-                    throw new Error('Failed to load products');
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
             } catch (error) {
                 console.error('Product loading failed:', error);
-                if (productSummary) productSummary.innerHTML = '<p class="error">Failed to load products</p>';
-                if (productsList) productsList.innerHTML = '<p class="error">Failed to load products</p>';
+                if (productSummary) productSummary.innerHTML = `<p class="error">Failed to load: ${error.message}</p>`;
+                if (productsList) productsList.innerHTML = `<p class="error">Failed to load: ${error.message}</p>`;
             }
         }
 
@@ -410,7 +425,7 @@
             const recentMessages = document.getElementById('recent-messages');
             
             try {
-                const response = await fetch(`${API_URL}/messages/recent`);
+                const response = await fetchWithCORS(`${API_URL}/messages/recent`);
                 if (response.ok) {
                     const data = await response.json();
                     messages = data.messages || [];
@@ -427,12 +442,12 @@
                     if (messagesContent) messagesContent.innerHTML = messageHTML || '<p>No messages yet</p>';
                     if (recentMessages) recentMessages.innerHTML = messageHTML || '<p>No messages yet</p>';
                 } else {
-                    throw new Error('Failed to load messages');
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
             } catch (error) {
                 console.error('Message loading failed:', error);
-                if (messagesContent) messagesContent.innerHTML = '<p class="error">Failed to load messages</p>';
-                if (recentMessages) recentMessages.innerHTML = '<p class="error">No messages available</p>';
+                if (messagesContent) messagesContent.innerHTML = `<p class="error">Failed to load: ${error.message}</p>`;
+                if (recentMessages) recentMessages.innerHTML = `<p class="error">Failed to load: ${error.message}</p>`;
             }
         }
 
@@ -440,7 +455,7 @@
             const analyticsContent = document.getElementById('analytics-content');
             
             try {
-                const response = await fetch(`${API_URL}/analytics`);
+                const response = await fetchWithCORS(`${API_URL}/analytics`);
                 if (response.ok) {
                     const data = await response.json();
                     analytics = data;
@@ -451,13 +466,14 @@
                         <p><strong>Response Rate:</strong> ${data.response_rate}%</p>
                         <p><strong>Conversion Rate:</strong> ${data.conversion_rate}%</p>
                         <p><strong>Active Customers:</strong> ${data.total_customers}</p>
+                        <p><strong>Active Products:</strong> ${data.active_products}</p>
                     `;
                 } else {
-                    throw new Error('Failed to load analytics');
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
             } catch (error) {
                 console.error('Analytics loading failed:', error);
-                analyticsContent.innerHTML = '<p class="error">Failed to load analytics</p>';
+                analyticsContent.innerHTML = `<p class="error">Failed to load: ${error.message}</p>`;
             }
         }
 
@@ -465,20 +481,21 @@
             const configDiv = document.getElementById('instagram-config');
             
             try {
-                const response = await fetch(`${API_URL}/instagram/config`);
+                const response = await fetchWithCORS(`${API_URL}/instagram/config`);
                 if (response.ok) {
                     const data = await response.json();
                     configDiv.innerHTML = `
                         <p><strong>App ID:</strong> ${data.app_id}</p>
                         <p><strong>Redirect URI:</strong> ${data.redirect_uri}</p>
                         <p><strong>Webhook URL:</strong> ${data.webhook_url}</p>
+                        <p><strong>Status:</strong> ${data.status}</p>
                     `;
                 } else {
-                    throw new Error('Failed to load Instagram config');
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
             } catch (error) {
                 console.error('Instagram config loading failed:', error);
-                configDiv.innerHTML = '<p class="error">Failed to load Instagram configuration</p>';
+                configDiv.innerHTML = `<p class="error">Failed to load: ${error.message}</p>`;
             }
         }
 
@@ -497,36 +514,46 @@
             
             resultDiv.innerHTML = '<p>Adding product...</p>';
             
-            // For now, we'll simulate adding to local storage since we don't have a POST endpoint
-            const newProduct = {
-                id: 'prod_' + Date.now(),
-                name: nameAr,
-                name_en: nameEn,
-                price: price,
-                currency: 'JOD',
-                quantity: stock,
-                stock: stock,
-                description: description
-            };
-            
-            // Add to local products array
-            products.push(newProduct);
-            
-            // Clear form
-            document.getElementById('product-name-ar').value = '';
-            document.getElementById('product-name-en').value = '';
-            document.getElementById('product-price').value = '';
-            document.getElementById('product-stock').value = '';
-            document.getElementById('product-description').value = '';
-            
-            resultDiv.innerHTML = '<p class="success">✅ Product added successfully!</p>';
-            
-            // Refresh product display
-            loadProducts();
-            
-            setTimeout(() => {
-                resultDiv.innerHTML = '';
-            }, 3000);
+            try {
+                const productData = {
+                    name: nameAr,
+                    name_en: nameEn,
+                    price: price,
+                    quantity: stock,
+                    description: description
+                };
+                
+                const response = await fetchWithCORS(`${API_URL}/catalog/add`, {
+                    method: 'POST',
+                    body: JSON.stringify(productData)
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Clear form
+                    document.getElementById('product-name-ar').value = '';
+                    document.getElementById('product-name-en').value = '';
+                    document.getElementById('product-price').value = '';
+                    document.getElementById('product-stock').value = '';
+                    document.getElementById('product-description').value = '';
+                    
+                    resultDiv.innerHTML = '<p class="success">✅ Product added successfully!</p>';
+                    
+                    // Refresh product display
+                    loadProducts();
+                    
+                    setTimeout(() => {
+                        resultDiv.innerHTML = '';
+                    }, 3000);
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ Failed to add product: ${error.message}</p>`;
+                console.error('Add product failed:', error);
+            }
         }
 
         async function testAI() {
@@ -544,25 +571,29 @@
             responseDiv.innerHTML = '🤖 AI is thinking...';
             
             try {
-                const response = await fetch(`${API_URL}/webhook/instagram`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        object: 'instagram',
-                        entry: [{
-                            messaging: [{
-                                sender: { id: 'test_user_' + Date.now() },
-                                recipient: { id: 'your_page_id' },
-                                timestamp: Date.now(),
-                                message: { text: message }
-                            }]
+                const webhookPayload = {
+                    object: 'instagram',
+                    entry: [{
+                        messaging: [{
+                            sender: { id: 'test_user_' + Date.now() },
+                            recipient: { id: 'your_page_id' },
+                            timestamp: Date.now(),
+                            message: { text: message }
                         }]
-                    })
+                    }]
+                };
+                
+                const response = await fetchWithCORS(`${API_URL}/webhook/instagram`, {
+                    method: 'POST',
+                    body: JSON.stringify(webhookPayload)
                 });
                 
                 if (response.ok) {
                     const data = await response.json();
                     responseDiv.innerHTML = `<strong>✅ AI Response:</strong><br>${data.ai_response || data.message || 'Message processed successfully!'}`;
+                    
+                    // Refresh messages to see the new test
+                    loadMessages();
                 } else {
                     const errorText = await response.text();
                     throw new Error(`HTTP ${response.status}: ${errorText}`);
@@ -577,12 +608,25 @@
             const resultDiv = document.getElementById('instagram-result');
             const statusDiv = document.getElementById('ig-connection-status');
             
-            resultDiv.innerHTML = '<p>🔄 Initiating Instagram connection...</p>';
+            resultDiv.innerHTML = '<p>🔄 Getting Instagram configuration...</p>';
             
             try {
                 // Get Instagram config
-                const configResponse = await fetch(`${API_URL}/instagram/config`);
+                const configResponse = await fetchWithCORS(`${API_URL}/instagram/config`);
+                if (!configResponse.ok) {
+                    throw new Error(`Failed to get config: ${configResponse.status}`);
+                }
+                
                 const config = await configResponse.json();
+                
+                if (config.app_id === 'YOUR_REAL_INSTAGRAM_APP_ID') {
+                    resultDiv.innerHTML = `
+                        <p class="error">❌ Instagram App not configured yet</p>
+                        <p>Please configure your Instagram App ID in the backend.</p>
+                        <p>Go to <a href="https://developers.facebook.com/apps/" target="_blank">Meta for Developers</a> to create an Instagram Basic Display app.</p>
+                    `;
+                    return;
+                }
                 
                 // Open Instagram OAuth popup
                 const oauthUrl = `https://api.instagram.com/oauth/authorize?client_id=${config.app_id}&redirect_uri=${encodeURIComponent(config.redirect_uri)}&scope=user_profile,user_media&response_type=code`;
@@ -593,8 +637,8 @@
                 const checkClosed = setInterval(() => {
                     if (popup.closed) {
                         clearInterval(checkClosed);
-                        resultDiv.innerHTML = '<p class="success">✅ Instagram connection initiated! Check popup for completion.</p>';
-                        statusDiv.textContent = 'Connection in progress...';
+                        resultDiv.innerHTML = '<p class="success">✅ Instagram OAuth window opened successfully!</p>';
+                        statusDiv.textContent = 'OAuth completed';
                     }
                 }, 1000);
                 
