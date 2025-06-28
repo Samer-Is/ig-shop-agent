@@ -164,6 +164,22 @@ export function WorkingDashboard() {
   const connectInstagram = () => {
     if (!instagramConfig) return;
     
+    // Demo Mode: Simulate Instagram connection without real OAuth
+    if (instagramConfig.app_id === "1234567890123456") {
+      // Show demo success message
+      setInstagramConnected(true);
+      
+      // Simulate successful OAuth response
+      setTimeout(() => {
+        alert("🎉 Demo Instagram Connection Successful!\n\nIn production mode, this would:\n✅ Connect to your real Instagram account\n✅ Enable DM automation\n✅ Set up webhooks\n\nTo use with real Instagram, set up an Instagram app in Meta Developer Console.");
+        loadData();
+        loadInstagramConfig();
+      }, 1000);
+      
+      return;
+    }
+    
+    // Real Instagram OAuth (when real App ID is configured)
     const instagramAuthUrl = `https://api.instagram.com/oauth/authorize?client_id=${instagramConfig.app_id}&redirect_uri=${encodeURIComponent(instagramConfig.redirect_uri)}&scope=user_profile,user_media&response_type=code`;
     
     // Open Instagram OAuth in popup
@@ -480,6 +496,19 @@ export function WorkingDashboard() {
             {/* Configuration Details */}
             {instagramConfig && (
               <div className="text-sm text-gray-600 border-t pt-4">
+                {instagramConfig.app_id === "1234567890123456" && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                      <span className="font-semibold text-yellow-800">Demo Mode Active</span>
+                    </div>
+                    <p className="text-yellow-700 text-xs">
+                      Using demo Instagram app. Click "Connect to Instagram" to simulate connection.
+                      For production, set up a real Instagram app in Meta Developer Console.
+                    </p>
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <p><strong>App ID:</strong> {instagramConfig.app_id}</p>
@@ -490,6 +519,15 @@ export function WorkingDashboard() {
                     <p className="font-mono text-xs break-all">{instagramConfig.webhook_url}</p>
                   </div>
                 </div>
+                
+                {instagramConfig.app_id === "1234567890123456" && (
+                  <div className="mt-3 text-xs text-gray-500">
+                    <p><strong>To use real Instagram:</strong></p>
+                    <p>1. Create app at developers.facebook.com</p>
+                    <p>2. Update backend with real App ID</p>
+                    <p>3. Configure OAuth redirect URI</p>
+                  </div>
+                )}
               </div>
             )}
 
