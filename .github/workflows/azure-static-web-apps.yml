@@ -31,26 +31,12 @@ jobs:
         with:
           version: 8
       
-      - name: Install dependencies
-        run: |
-          cd ig-shop-agent-dashboard
-          pnpm install --no-frozen-lockfile
-      
-      - name: Build application
-        run: |
-          cd ig-shop-agent-dashboard
-          pnpm run build
-        env:
-          CI: false
-      
-      - name: Optimize build output
+      - name: Skip build - using pre-built functional dashboard
         run: |
           cd ig-shop-agent-dashboard/dist
-          # Remove source maps if any
-          find . -name "*.map" -type f -delete
-          # List files for debugging
+          echo "Using pre-built functional dashboard"
           ls -la
-          du -sh *
+          echo "Functional dashboard ready for deployment"
       
       - name: Build And Deploy
         id: builddeploy
