@@ -58,7 +58,7 @@ export function ConnectionStatus({ className }: ConnectionStatusProps) {
       return {
         icon: <CheckCircle className="w-4 h-4" />,
         text: 'Connected',
-        variant: 'success' as const,
+        variant: 'default' as const,
         color: 'text-green-600'
       };
     }
