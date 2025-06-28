@@ -57,7 +57,9 @@ Ready for one-command deployment!"
 1. Go to: https://github.com/new
 2. **Repository name**: `ig-shop-agent`
 3. **Description**: `Ultra Low-Cost Instagram DM Automation Platform with Jordanian Arabic Support`
-4. **Visibility**: Public (recommended)
+4. **Visibility**: Choose based on your needs:
+   - **Private**: Secure, professional (recommended for business)
+   - **Public**: Easy one-command deployment, portfolio showcase
 5. **Do NOT** check "Initialize this repository with a README"
 6. Click **"Create repository"**
 

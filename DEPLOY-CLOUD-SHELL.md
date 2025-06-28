@@ -52,9 +52,9 @@ az deployment group create \
   --parameters projectName=igshop environment=dev location=eastus \
                postgresAdminUsername=igshop_admin \
                postgresAdminPassword="ChangeMe123!@#" \
-               openAiApiKey="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" \
+               openAiApiKey="YOUR_OPENAI_API_KEY" \
                metaAppId="1879578119651644" \
-               metaAppSecret="f79b3350f43751d6139e1b29a232cbf3"
+               metaAppSecret="YOUR_FACEBOOK_APP_SECRET"
 ```
 
 ## Advantages of Cloud Shell:
