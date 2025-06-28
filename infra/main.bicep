@@ -5,7 +5,7 @@ param projectName string = 'igshop'
 param environment string = 'dev'
 
 @description('The location for all resources')
-param location string = resourceGroup().location
+param location string = 'westus2'
 
 @description('Administrator login for PostgreSQL')
 @secure()
@@ -139,85 +139,52 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
-// Container Group for PostgreSQL with pgvector (Ultra Low Cost)
-resource postgresContainer 'Microsoft.ContainerInstance/containerGroups@2023-05-01' = {
+// PostgreSQL Database - Azure Database for PostgreSQL Flexible Server (Minimal Tier)
+resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-03-01-preview' = {
   name: '${baseName}-postgres'
   location: location
-  properties: {
-    containers: [
-      {
-        name: 'postgres-pgvector'
-        properties: {
-          image: 'pgvector/pgvector:pg15'
-          ports: [
-            {
-              port: 5432
-              protocol: 'TCP'
-            }
-          ]
-          environmentVariables: [
-            {
-              name: 'POSTGRES_DB'
-              value: '${baseName}_db'
-            }
-            {
-              name: 'POSTGRES_USER'
-              value: postgresAdminUsername
-            }
-            {
-              name: 'POSTGRES_PASSWORD'
-              secureValue: postgresAdminPassword
-            }
-          ]
-          resources: {
-            requests: {
-              cpu: 1
-              memoryInGB: 2
-            }
-          }
-          volumeMounts: [
-            {
-              name: 'postgres-data'
-              mountPath: '/var/lib/postgresql/data'
-            }
-          ]
-        }
-      }
-    ]
-    osType: 'Linux'
-    restartPolicy: 'Always'
-    ipAddress: {
-      type: 'Public'
-      ports: [
-        {
-          port: 5432
-          protocol: 'TCP'
-        }
-      ]
-      dnsNameLabel: '${baseName}-postgres'
-    }
-    volumes: [
-      {
-        name: 'postgres-data'
-        azureFile: {
-          shareName: 'postgres-data'
-          storageAccountName: storageAccount.name
-          storageAccountKey: storageAccount.listKeys().keys[0].value
-        }
-      }
-    ]
+  sku: {
+    name: 'Standard_B1ms'
+    tier: 'Burstable'
   }
-  dependsOn: [storageAccount, postgresFileShare]
+  properties: {
+    administratorLogin: postgresAdminUsername
+    administratorLoginPassword: postgresAdminPassword
+    version: '15'
+    storage: {
+      storageSizeGB: 32
+    }
+    backup: {
+      backupRetentionDays: 7
+      geoRedundantBackup: 'Disabled'
+    }
+    highAvailability: {
+      mode: 'Disabled'
+    }
+  }
 }
 
-// File Share for PostgreSQL data persistence
-resource postgresFileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
-  name: 'postgres-data'
-  parent: fileService
+// PostgreSQL Database
+resource postgresDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-03-01-preview' = {
+  name: '${baseName}_db'
+  parent: postgresServer
   properties: {
-    quota: 10 // 10GB should be enough for MVP
+    charset: 'UTF8'
+    collation: 'en_US.UTF8'
   }
 }
+
+// PostgreSQL Firewall Rule to allow all Azure services
+resource postgresFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2023-03-01-preview' = {
+  name: 'allow-azure-services'
+  parent: postgresServer
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
+  }
+}
+
+// Note: File share removed - using Azure Database for PostgreSQL instead
 
 // File Service for storage account
 resource fileService 'Microsoft.Storage/storageAccounts/fileServices@2023-01-01' = {
@@ -227,7 +194,7 @@ resource fileService 'Microsoft.Storage/storageAccounts/fileServices@2023-01-01'
 
 // Service Bus Namespace
 resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
-  name: '${baseName}-sb'
+  name: '${baseName}-bus'
   location: location
   sku: {
     name: 'Basic'
@@ -267,62 +234,8 @@ resource orderQueue 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-preview' 
 // Note: Azure AI Search removed for cost optimization
 // Using PostgreSQL pgvector extension instead
 
-// Azure OpenAI Service
-resource openAiService 'Microsoft.CognitiveServices/accounts@2023-10-01-preview' = {
-  name: '${baseName}-openai'
-  location: 'eastus' // OpenAI is only available in specific regions
-  kind: 'OpenAI'
-  sku: {
-    name: 'S0'
-  }
-  properties: {
-    customSubDomainName: '${baseName}-openai'
-    publicNetworkAccess: 'Enabled'
-    networkAcls: {
-      defaultAction: 'Allow'
-      virtualNetworkRules: []
-      ipRules: []
-    }
-  }
-}
-
-// OpenAI Deployments
-resource gpt4oDeployment 'Microsoft.CognitiveServices/accounts/deployments@2023-10-01-preview' = {
-  name: 'gpt-4o'
-  parent: openAiService
-  sku: {
-    name: 'Standard'
-    capacity: 10
-  }
-  properties: {
-    model: {
-      format: 'OpenAI'
-      name: 'gpt-4o'
-      version: '2024-05-13'
-    }
-    versionUpgradeOption: 'OnceNewDefaultVersionAvailable'
-    raiPolicyName: 'Microsoft.Default'
-  }
-}
-
-resource embeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2023-10-01-preview' = {
-  name: 'text-embedding-3-small'
-  parent: openAiService
-  sku: {
-    name: 'Standard'
-    capacity: 10
-  }
-  properties: {
-    model: {
-      format: 'OpenAI'
-      name: 'text-embedding-3-small'
-      version: '1'
-    }
-    versionUpgradeOption: 'OnceNewDefaultVersionAvailable'
-    raiPolicyName: 'Microsoft.Default'
-  }
-  dependsOn: [gpt4oDeployment]
-}
+// Note: Azure OpenAI removed due to quota limitations
+// Using external OpenAI API key instead (more reliable and flexible)
 
 // Function App Consumption Plan (Ultra Low Cost - Pay per execution)
 resource functionAppPlan 'Microsoft.Web/serverfarms@2023-01-01' = {
@@ -379,12 +292,12 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
           value: '@Microsoft.KeyVault(VaultName=${keyVault.name};SecretName=postgres-connection-string)'
         }
         {
-          name: 'AZURE_OPENAI_ENDPOINT'
-          value: openAiService.properties.endpoint
+          name: 'OPENAI_API_KEY'
+          value: '@Microsoft.KeyVault(VaultName=${keyVault.name};SecretName=openai-api-key)'
         }
         {
-          name: 'AZURE_OPENAI_API_KEY'
-          value: '@Microsoft.KeyVault(VaultName=${keyVault.name};SecretName=openai-api-key)'
+          name: 'OPENAI_API_BASE'
+          value: 'https://api.openai.com/v1'
         }
         {
           name: 'AZURE_STORAGE_CONNECTION_STRING'
@@ -451,7 +364,7 @@ resource postgresConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01'
   name: 'postgres-connection-string'
   parent: keyVault
   properties: {
-    value: 'postgresql://${postgresAdminUsername}:${postgresAdminPassword}@${postgresContainer.properties.ipAddress.fqdn}:5432/${baseName}_db'
+    value: 'postgresql://${postgresAdminUsername}:${postgresAdminPassword}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${baseName}_db?sslmode=require'
   }
 }
 
@@ -463,19 +376,11 @@ resource serviceBusConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-0
   }
 }
 
-resource openAiEndpointSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
-  name: 'openai-endpoint'
-  parent: keyVault
-  properties: {
-    value: openAiService.properties.endpoint
-  }
-}
-
 resource openAiKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   name: 'openai-api-key'
   parent: keyVault
   properties: {
-    value: listKeys(openAiService.id, openAiService.apiVersion).key1
+    value: openAiApiKey
   }
 }
 
@@ -546,28 +451,29 @@ resource functionStorageAccess 'Microsoft.Authorization/roleAssignments@2022-04-
 output resourceGroupName string = resourceGroup().name
 output storageAccountName string = storageAccount.name
 output keyVaultName string = keyVault.name
-output postgresContainerFQDN string = postgresContainer.properties.ipAddress.fqdn
+output postgresServerFQDN string = postgresServer.properties.fullyQualifiedDomainName
 output serviceBusNamespace string = serviceBusNamespace.name
-output openAiServiceName string = openAiService.name
+output openAiApiConfigured string = 'External OpenAI API configured'
 output functionAppName string = functionApp.name
 output staticWebAppName string = staticWebApp.name
 output applicationInsightsName string = applicationInsights.name
 output dnsZoneName string = dnsZone.name
 output functionAppUrl string = 'https://${functionApp.properties.defaultHostName}'
 output staticWebAppUrl string = 'https://${staticWebApp.properties.defaultHostname}'
-output postgresConnectionString string = 'postgresql://${postgresAdminUsername}:${postgresAdminPassword}@${postgresContainer.properties.ipAddress.fqdn}:5432/${baseName}_db'
+output postgresConnectionString string = 'postgresql://${postgresAdminUsername}:${postgresAdminPassword}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${baseName}_db?sslmode=require'
 
-// Cost Summary (Ultra Low Cost Architecture)
+// Cost Summary (Optimized Architecture)
 output estimatedMonthlyCost object = {
-  postgresContainer: '$15-20 (1 CPU, 2GB RAM Container)'
+  postgresFlexibleServer: '$35-45 (Standard_B1ms - 1 vCore, 2GB RAM, 32GB storage)'
   functionApp: '$2-5 (Consumption plan - first 1M executions free)'
   storage: '$1-3 (Free tier + minimal usage)'
   staticWebApp: '$9 (Standard tier)'
   keyVault: '$0-1 (Free tier for operations)'
   serviceBus: '$0-1 (Basic tier minimal usage)'
-  openAI: '$Variable (Azure OpenAI usage-based)'
+  externalOpenAI: '$Variable (External OpenAI API usage-based)'
   applicationInsights: '$0 (Free tier)'
   dnsZone: '$0.50 per zone per month'
-  total: '$28-40/month excluding OpenAI usage'
-  savings: 'Saves $250+ per month compared to original architecture'
+  total: '$48-65/month excluding OpenAI usage'
+  savings: 'Saves $200+ per month compared to original architecture'
+  note: 'Using PostgreSQL Flexible Server for better reliability and pgvector support'
 }

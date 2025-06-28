@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://igshop-dev-yjhtoi-api.azurewebsites.net/api';
+const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
 
 // API Response types
 interface ApiResponse<T> {

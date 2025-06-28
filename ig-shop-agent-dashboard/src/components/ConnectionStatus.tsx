@@ -132,7 +132,7 @@ export function ConnectionStatus({ className }: ConnectionStatusProps) {
         <div className="pt-2 border-t">
           <div className="text-xs text-slate-500">
             <strong>API Endpoint:</strong><br />
-            https://igshop-dev-yjhtoi-api.azurewebsites.net/api
+            https://igshop-api.azurewebsites.net
           </div>
         </div>
       </CardContent>
