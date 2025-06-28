@@ -25,18 +25,21 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: ig-shop-agent-dashboard/package.json
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
       
       - name: Install dependencies
         run: |
           cd ig-shop-agent-dashboard
-          npm ci
+          pnpm install --frozen-lockfile
       
       - name: Build application
         run: |
           cd ig-shop-agent-dashboard
-          npm run build
+          pnpm run build
         env:
           CI: false
       
