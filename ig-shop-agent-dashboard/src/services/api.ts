@@ -76,6 +76,8 @@ interface CreateCatalogItemRequest {
 interface Order {
   id: number;
   customer_name: string;
+  customer: string;     // Alternative property name used in some components
+  sku: string;          // Missing SKU property
   total_amount: number;
   status: string;
   created_at: string;
@@ -89,6 +91,7 @@ interface Analytics {
   confirmed_orders: number;
   total_products: number;
   total_revenue: number;
+  top_products: CatalogItem[];  // Missing property
   
   // Nested structures for additional data
   orders: {
