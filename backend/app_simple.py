@@ -4,14 +4,19 @@ Azure Web App compatible backend - Production Ready
 """
 import os
 import logging
+import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
+import asyncio
+import asyncpg
+from functools import wraps
 
 # Import our modules
 from config import settings
+from database import db_service
 from instagram_oauth import (
     get_instagram_auth_url, 
     handle_oauth_callback,
@@ -177,58 +182,89 @@ def verify_token():
         return jsonify({'error': 'Token verification failed'}), 500
 
 # =============================================================================
-# CATALOG MANAGEMENT ENDPOINTS (MOCK DATA FOR NOW)
+# CATALOG MANAGEMENT ENDPOINTS - LIVE DATABASE INTEGRATION
 # =============================================================================
 
-# Mock catalog data
-MOCK_CATALOG = [
-    {
-        'id': '1',
-        'sku': 'DRESS-001',
-        'name': 'فستان صيفي أنيق',
-        'price_jod': 45.99,
-        'description': 'فستان صيفي مريح ومناسب لجميع المناسبات',
-        'category': 'فساتين',
-        'stock_quantity': 15,
-        'media_url': 'https://example.com/dress1.jpg'
-    },
-    {
-        'id': '2',
-        'sku': 'SHOES-001',
-        'name': 'حذاء رياضي للنساء',
-        'price_jod': 65.00,
-        'description': 'حذاء رياضي مريح للاستخدام اليومي',
-        'category': 'أحذية',
-        'stock_quantity': 8,
-        'media_url': 'https://example.com/shoes1.jpg'
-    },
-    {
-        'id': '3',
-        'sku': 'BAG-001',
-        'name': 'حقيبة يد عصرية',
-        'price_jod': 89.99,
-        'description': 'حقيبة يد أنيقة ومناسبة للعمل والمناسبات',
-        'category': 'حقائب',
-        'stock_quantity': 5,
-        'media_url': 'https://example.com/bag1.jpg'
-    }
-]
+def async_route(f):
+    """Decorator to handle async functions in Flask"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        return asyncio.run(f(*args, **kwargs))
+    return decorated_function
+
+def get_tenant_id_from_token(auth_header: str) -> Optional[str]:
+    """Extract tenant_id from JWT token"""
+    try:
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return None
+        
+        token = auth_header[7:]  # Remove 'Bearer ' prefix
+        payload = verify_session_token(token)
+        return payload.get('tenant_id') if payload else None
+    except Exception:
+        return None
 
 @app.route('/api/catalog', methods=['GET'])
-def get_catalog():
+@async_route
+async def get_catalog():
     """Get catalog items for current tenant"""
     try:
-        # Check authentication
+        # Check authentication and get tenant_id
         auth_header = request.headers.get('Authorization')
-        if not auth_header:
+        tenant_id = get_tenant_id_from_token(auth_header)
+        
+        if not tenant_id:
             return jsonify({'error': 'Authentication required'}), 401
         
-        # For now, return mock data
+        # Initialize database connection if needed
+        if not db_service.is_connected:
+            await db_service.connect()
+        
+        # Get pagination parameters
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+        category = request.args.get('category')
+        search = request.args.get('search')
+        
+        # Build query
+        where_conditions = ["tenant_id = $1"]
+        params = [tenant_id]
+        param_count = 1
+        
+        if category:
+            param_count += 1
+            where_conditions.append(f"category = ${param_count}")
+            params.append(category)
+        
+        if search:
+            param_count += 1
+            where_conditions.append(f"(name ILIKE ${param_count} OR description ILIKE ${param_count})")
+            params.append(f"%{search}%")
+        
+        where_clause = " AND ".join(where_conditions)
+        
+        # Get total count
+        count_query = f"SELECT COUNT(*) FROM catalog_items WHERE {where_clause}"
+        total = await db_service.fetch_val(count_query, *params)
+        
+        # Get items
+        items_query = f"""
+            SELECT id, tenant_id, sku, name, price_jod, media_url, extras, 
+                   description, category, stock_quantity, created_at, updated_at
+            FROM catalog_items 
+            WHERE {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ${param_count + 1} OFFSET ${param_count + 2}
+        """
+        params.extend([limit, offset])
+        
+        items = await db_service.fetch_all(items_query, *params)
+        
         return jsonify({
-            'items': MOCK_CATALOG,
-            'total': len(MOCK_CATALOG),
-            'limit': 50,
-            'offset': 0
+            'items': items,
+            'total': total or 0,
+            'limit': limit,
+            'offset': offset
         })
         
     except Exception as e:
@@ -236,13 +272,20 @@ def get_catalog():
         return jsonify({'error': 'Failed to fetch catalog'}), 500
 
 @app.route('/api/catalog', methods=['POST'])
-def create_catalog_item():
+@async_route
+async def create_catalog_item():
     """Create new catalog item"""
     try:
-        # Check authentication
+        # Check authentication and get tenant_id
         auth_header = request.headers.get('Authorization')
-        if not auth_header:
+        tenant_id = get_tenant_id_from_token(auth_header)
+        
+        if not tenant_id:
             return jsonify({'error': 'Authentication required'}), 401
+        
+        # Initialize database connection if needed
+        if not db_service.is_connected:
+            await db_service.connect()
         
         data = request.get_json()
         if not data:
@@ -254,19 +297,34 @@ def create_catalog_item():
             if not data.get(field):
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
-        # Generate new item ID
-        new_id = str(len(MOCK_CATALOG) + 1)
-        new_item = {
-            'id': new_id,
-            **data
-        }
+        # Generate item ID
+        item_id = str(uuid.uuid4())
         
-        # Add to mock catalog
-        MOCK_CATALOG.append(new_item)
+        # Insert into database
+        insert_query = """
+            INSERT INTO catalog_items (
+                id, tenant_id, sku, name, price_jod, description, category, 
+                stock_quantity, media_url, extras
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        """
+        
+        await db_service.execute_query(
+            insert_query,
+            item_id,
+            tenant_id,
+            data['sku'],
+            data['name'],
+            data['price_jod'],
+            data.get('description', ''),
+            data.get('category', ''),
+            data.get('stock_quantity', 0),
+            data.get('media_url', ''),
+            data.get('extras', {})
+        )
         
         return jsonify({
             'success': True,
-            'item_id': new_id,
+            'item_id': item_id,
             'message': 'Catalog item created successfully'
         }), 201
         
@@ -275,51 +333,63 @@ def create_catalog_item():
         return jsonify({'error': 'Failed to create catalog item'}), 500
 
 # =============================================================================
-# ORDER MANAGEMENT ENDPOINTS (MOCK DATA FOR NOW)
+# ORDER MANAGEMENT ENDPOINTS - LIVE DATABASE INTEGRATION
 # =============================================================================
 
-MOCK_ORDERS = [
-    {
-        'id': '1',
-        'sku': 'DRESS-001',
-        'qty': 2,
-        'customer': 'أحمد محمد',
-        'phone': '+962791234567',
-        'status': 'pending',
-        'total_amount': 91.98,
-        'delivery_address': 'عمان، الأردن',
-        'notes': 'يرجى التواصل قبل التوصيل',
-        'created_at': '2024-01-15T10:30:00Z'
-    },
-    {
-        'id': '2',
-        'sku': 'SHOES-001',
-        'qty': 1,
-        'customer': 'فاطمة أحمد',
-        'phone': '+962795678901',
-        'status': 'confirmed',
-        'total_amount': 65.00,
-        'delivery_address': 'إربد، الأردن',
-        'notes': '',
-        'created_at': '2024-01-15T14:15:00Z'
-    }
-]
-
 @app.route('/api/orders', methods=['GET'])
-def get_orders():
+@async_route
+async def get_orders():
     """Get orders for current tenant"""
     try:
-        # Check authentication
+        # Check authentication and get tenant_id
         auth_header = request.headers.get('Authorization')
-        if not auth_header:
+        tenant_id = get_tenant_id_from_token(auth_header)
+        
+        if not tenant_id:
             return jsonify({'error': 'Authentication required'}), 401
         
-        # Return mock orders
+        # Initialize database connection if needed
+        if not db_service.is_connected:
+            await db_service.connect()
+        
+        # Get pagination parameters
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+        status = request.args.get('status')
+        
+        # Build query
+        where_conditions = ["tenant_id = $1"]
+        params = [tenant_id]
+        
+        if status:
+            where_conditions.append("status = $2")
+            params.append(status)
+        
+        where_clause = " AND ".join(where_conditions)
+        
+        # Get total count
+        count_query = f"SELECT COUNT(*) FROM orders WHERE {where_clause}"
+        total = await db_service.fetch_val(count_query, *params)
+        
+        # Get orders
+        param_offset = len(params)
+        orders_query = f"""
+            SELECT id, tenant_id, sku, qty, customer, phone, status, 
+                   total_amount, delivery_address, notes, created_at, updated_at
+            FROM orders 
+            WHERE {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ${param_offset + 1} OFFSET ${param_offset + 2}
+        """
+        params.extend([limit, offset])
+        
+        orders = await db_service.fetch_all(orders_query, *params)
+        
         return jsonify({
-            'orders': MOCK_ORDERS,
-            'total': len(MOCK_ORDERS),
-            'limit': 50,
-            'offset': 0
+            'orders': orders,
+            'total': total or 0,
+            'limit': limit,
+            'offset': offset
         })
         
     except Exception as e:
@@ -327,13 +397,20 @@ def get_orders():
         return jsonify({'error': 'Failed to fetch orders'}), 500
 
 @app.route('/api/orders', methods=['POST'])
-def create_order():
+@async_route
+async def create_order():
     """Create new order"""
     try:
-        # Check authentication
+        # Check authentication and get tenant_id
         auth_header = request.headers.get('Authorization')
-        if not auth_header:
+        tenant_id = get_tenant_id_from_token(auth_header)
+        
+        if not tenant_id:
             return jsonify({'error': 'Authentication required'}), 401
+        
+        # Initialize database connection if needed
+        if not db_service.is_connected:
+            await db_service.connect()
         
         data = request.get_json()
         if not data:
@@ -345,21 +422,34 @@ def create_order():
             if not data.get(field):
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
-        # Generate new order ID
-        new_id = str(len(MOCK_ORDERS) + 1)
-        new_order = {
-            'id': new_id,
-            'status': 'pending',
-            'created_at': datetime.utcnow().isoformat() + 'Z',
-            **data
-        }
+        # Generate order ID
+        order_id = str(uuid.uuid4())
         
-        # Add to mock orders
-        MOCK_ORDERS.append(new_order)
+        # Insert into database
+        insert_query = """
+            INSERT INTO orders (
+                id, tenant_id, sku, qty, customer, phone, status, 
+                total_amount, delivery_address, notes
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        """
+        
+        await db_service.execute_query(
+            insert_query,
+            order_id,
+            tenant_id,
+            data['sku'],
+            data['qty'],
+            data['customer'],
+            data['phone'],
+            'pending',  # Default status
+            data['total_amount'],
+            data.get('delivery_address', ''),
+            data.get('notes', '')
+        )
         
         return jsonify({
             'success': True,
-            'order_id': new_id,
+            'order_id': order_id,
             'message': 'Order created successfully'
         }), 201
         
@@ -371,13 +461,129 @@ def create_order():
 # AI AGENT ENDPOINTS
 # =============================================================================
 
-@app.route('/api/ai/test-response', methods=['POST'])
-def test_ai_response():
-    """Test AI agent response"""
+@app.route('/api/analytics/dashboard', methods=['GET'])
+@async_route
+async def get_dashboard_analytics():
+    """Get dashboard analytics for current tenant"""
     try:
-        # Check authentication
+        # Check authentication and get tenant_id
         auth_header = request.headers.get('Authorization')
-        if not auth_header:
+        tenant_id = get_tenant_id_from_token(auth_header)
+        
+        if not tenant_id:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        # Initialize database connection if needed
+        if not db_service.is_connected:
+            await db_service.connect()
+        
+        # Get analytics data from database
+        # Total orders
+        total_orders = await db_service.fetch_val(
+            "SELECT COUNT(*) FROM orders WHERE tenant_id = $1", tenant_id
+        ) or 0
+        
+        # Total revenue
+        total_revenue = await db_service.fetch_val(
+            "SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE tenant_id = $1 AND status IN ('confirmed', 'delivered')", 
+            tenant_id
+        ) or 0
+        
+        # Total products
+        total_products = await db_service.fetch_val(
+            "SELECT COUNT(*) FROM catalog_items WHERE tenant_id = $1", tenant_id
+        ) or 0
+        
+        # Pending orders
+        pending_orders = await db_service.fetch_val(
+            "SELECT COUNT(*) FROM orders WHERE tenant_id = $1 AND status = 'pending'", tenant_id
+        ) or 0
+        
+        # Confirmed orders
+        confirmed_orders = await db_service.fetch_val(
+            "SELECT COUNT(*) FROM orders WHERE tenant_id = $1 AND status = 'confirmed'", tenant_id
+        ) or 0
+        
+        # Recent orders (last 5)
+        recent_orders = await db_service.fetch_all(
+            """SELECT id, sku, qty, customer, phone, status, total_amount, created_at 
+               FROM orders WHERE tenant_id = $1 
+               ORDER BY created_at DESC LIMIT 5""", 
+            tenant_id
+        )
+        
+        # Top products (first 3 by creation date)
+        top_products = await db_service.fetch_all(
+            """SELECT id, sku, name, price_jod, category, stock_quantity 
+               FROM catalog_items WHERE tenant_id = $1 
+               ORDER BY created_at DESC LIMIT 3""", 
+            tenant_id
+        )
+        
+        return jsonify({
+            'total_orders': total_orders,
+            'total_revenue': float(total_revenue),
+            'total_products': total_products,
+            'pending_orders': pending_orders,
+            'confirmed_orders': confirmed_orders,
+            'recent_orders': recent_orders,
+            'top_products': top_products
+        })
+        
+    except Exception as e:
+        logger.error(f"Get analytics error: {e}")
+        return jsonify({'error': 'Failed to fetch analytics'}), 500
+
+async def generate_ai_response(message: str, tenant_id: str) -> str:
+    """Generate AI response using real catalog data"""
+    try:
+        # Initialize database connection if needed
+        if not db_service.is_connected:
+            await db_service.connect()
+        
+        # Get real catalog items for this tenant
+        catalog_items = await db_service.fetch_all(
+            """SELECT sku, name, price_jod, description, category, stock_quantity 
+               FROM catalog_items WHERE tenant_id = $1 AND stock_quantity > 0
+               ORDER BY created_at DESC LIMIT 10""",
+            tenant_id
+        )
+        
+        if not catalog_items:
+            return "أعتذر، لا توجد منتجات متاحة حالياً. يرجى المحاولة لاحقاً."
+        
+        # Simple AI response generation based on message content
+        message_lower = message.lower()
+        
+        if any(word in message_lower for word in ['أريد', 'أحتاج', 'أبحث', 'want', 'need', 'looking for']):
+            if catalog_items:
+                first_item = catalog_items[0]
+                return f"أهلاً وسهلاً! يمكنني أن أساعدك. لدينا {first_item['name']} متوفر بسعر {first_item['price_jod']} دينار أردني. هل تود معرفة المزيد عن هذا المنتج أو تفضل رؤية منتجات أخرى؟"
+        
+        elif any(word in message_lower for word in ['سعر', 'كم', 'price', 'cost', 'how much']):
+            return f"أسعارنا تتراوح من {min(item['price_jod'] for item in catalog_items)} إلى {max(item['price_jod'] for item in catalog_items)} دينار أردني. أي منتج تود معرفة سعره تحديداً؟"
+        
+        elif any(word in message_lower for word in ['متوفر', 'موجود', 'available', 'in stock']):
+            available_count = len([item for item in catalog_items if item['stock_quantity'] > 0])
+            return f"لدينا {available_count} منتج متوفر حالياً. هل تود رؤية قائمة المنتجات المتاحة؟"
+        
+        else:
+            return f"أهلاً وسهلاً بك! كيف يمكنني مساعدتك اليوم؟ لدينا {len(catalog_items)} منتج متوفر. يمكنك السؤال عن أي منتج أو سعر."
+        
+    except Exception as e:
+        logger.error(f"AI response generation error: {e}")
+        return "أعتذر، حدث خطأ في النظام. يرجى المحاولة مرة أخرى."
+
+@app.route('/api/ai/test-response', methods=['POST'])
+@async_route
+async def test_ai_response():
+    """Test AI agent response with real catalog data"""
+    try:
+        # Check authentication and get tenant_id
+        auth_header = request.headers.get('Authorization')
+        tenant_id = get_tenant_id_from_token(auth_header)
+        
+        if not tenant_id:
             return jsonify({'error': 'Authentication required'}), 401
         
         data = request.get_json()
@@ -387,8 +593,8 @@ def test_ai_response():
         # Get customer message
         customer_message = data['message']
         
-        # Generate AI response
-        ai_response = generate_ai_response(customer_message)
+        # Generate AI response using real catalog data
+        ai_response = await generate_ai_response(customer_message, tenant_id)
         
         return jsonify({
             'success': True,
@@ -399,77 +605,6 @@ def test_ai_response():
     except Exception as e:
         logger.error(f"AI test response error: {e}")
         return jsonify({'error': 'Failed to generate AI response'}), 500
-
-def generate_ai_response(message: str) -> str:
-    """Generate AI response using OpenAI"""
-    try:
-        import openai
-        
-        # Create OpenAI client
-        client = openai.OpenAI(api_key=settings.openai_api_key)
-        
-        # Create context from catalog
-        catalog_context = "Available products:\n"
-        for item in MOCK_CATALOG:
-            catalog_context += f"- {item['name']}: {item['price_jod']} JOD\n"
-        
-        # Create prompt
-        prompt = f"""You are a helpful sales assistant for an online store in Jordan. 
-        
-Respond in Jordanian Arabic dialect. Be friendly and helpful.
-
-{catalog_context}
-
-Customer message: {message}
-
-Provide a helpful response in Jordanian Arabic:"""
-        
-        # Make OpenAI API call
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful sales assistant in Jordan. Always respond in Jordanian Arabic dialect."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=200,
-            temperature=0.7
-        )
-        
-        return response.choices[0].message.content.strip()
-        
-    except Exception as e:
-        logger.error(f"OpenAI API error: {e}")
-        return "أهلاً وسهلاً! كيف بقدر أساعدك اليوم؟ (Hello! How can I help you today?)"
-
-# =============================================================================
-# ANALYTICS ENDPOINTS
-# =============================================================================
-
-@app.route('/api/analytics/dashboard', methods=['GET'])
-def get_dashboard_analytics():
-    """Get dashboard analytics data"""
-    try:
-        # Check authentication
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        # Mock analytics data
-        analytics = {
-            'total_orders': len(MOCK_ORDERS),
-            'total_revenue': sum(order['total_amount'] for order in MOCK_ORDERS),
-            'total_products': len(MOCK_CATALOG),
-            'pending_orders': len([o for o in MOCK_ORDERS if o['status'] == 'pending']),
-            'confirmed_orders': len([o for o in MOCK_ORDERS if o['status'] == 'confirmed']),
-            'recent_orders': MOCK_ORDERS[:5],
-            'top_products': MOCK_CATALOG[:3]
-        }
-        
-        return jsonify(analytics)
-        
-    except Exception as e:
-        logger.error(f"Dashboard analytics error: {e}")
-        return jsonify({'error': 'Failed to fetch analytics'}), 500
 
 # =============================================================================
 # ERROR HANDLERS

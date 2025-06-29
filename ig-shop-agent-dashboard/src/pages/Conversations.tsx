@@ -65,11 +65,17 @@ export function Conversations() {
       ? messages.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
       : [];
     
+    // Calculate actual unread count based on ai_generated flag and recent timestamp
+    const unreadCount = sortedMessages.filter(msg => 
+      !msg.ai_generated && 
+      new Date(msg.ts) > new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
+    ).length;
+    
     return {
       sender,
       messages: sortedMessages,
       lastMessage: sortedMessages[sortedMessages.length - 1],
-      unreadCount: Math.floor(Math.random() * 3) // Mock unread count
+      unreadCount: unreadCount
     };
   });
 
@@ -81,12 +87,52 @@ export function Conversations() {
     ? threadList.find(t => t.sender === selectedConversation)
     : null;
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedConversation) return;
+  // Send message to customer
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !selectedThread) return;
     
-    // Mock sending message
-    console.log('Sending message:', newMessage);
-    setNewMessage('');
+    try {
+      // Create outgoing message
+      const outgoingMessage: Conversation = {
+        id: `msg_${Date.now()}`,
+        tenant_id: 'current',
+        sender: selectedThread,
+        text: newMessage,
+        ts: new Date().toISOString(),
+        tokens_in: 0,
+        tokens_out: 0,
+        message_type: 'outgoing',
+        ai_generated: false,
+        context: {}
+      };
+      
+      // Send message via API (placeholder - implement actual Instagram API call)
+      const response = await fetch('/api/conversations/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          recipient: selectedThread,
+          message: newMessage
+        })
+      });
+      
+      if (response.ok) {
+        // Add to local state immediately for UI responsiveness
+        setConversations(prev => [...prev, outgoingMessage]);
+        setNewMessage('');
+        
+        // Refresh conversations to get any AI responses
+        const updatedConversations = await apiService.getConversations();
+        setConversations(updatedConversations);
+      } else {
+        console.error('Failed to send message');
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
   };
 
   const conversationStats = {
@@ -366,10 +412,10 @@ export function Conversations() {
                       placeholder="Type a message to intervene..."
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                      onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                       className="flex-1"
                     />
-                    <Button onClick={handleSendMessage} disabled={!newMessage.trim()}>
+                    <Button onClick={sendMessage} disabled={!newMessage.trim()}>
                       <Send className="w-4 h-4" />
                     </Button>
                   </div>
