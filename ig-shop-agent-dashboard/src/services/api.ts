@@ -53,6 +53,7 @@ interface AuthResponse {
 // Catalog interfaces - matching database schema
 interface CatalogItem {
   id: number;
+  sku: string;
   name: string;
   description: string;
   price_jod: number;
