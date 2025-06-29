@@ -45,19 +45,28 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
         
-    - name: Configure Azure Web App
+    - name: Configure Azure Web App Runtime & Startup
       run: |
-        # Set the runtime stack to Python 3.11
+        echo "🔧 Configuring Azure Web App for Python Flask backend..."
+        
+        # CRITICAL: Set runtime to Python 3.11 (not Node.js)
         az webapp config set \
           --resource-group igshop-dev-rg-v2 \
           --name igshop-dev-yjhtoi-api \
           --linux-fx-version "PYTHON|3.11"
         
-        # Configure startup command for production app
+        # CRITICAL: Set startup command for production_app.py
         az webapp config set \
           --resource-group igshop-dev-rg-v2 \
           --name igshop-dev-yjhtoi-api \
           --startup-file "gunicorn --bind=0.0.0.0 --timeout 600 production_app:app"
+        
+        # Verify configuration
+        echo "✅ Runtime configured:"
+        az webapp config show \
+          --resource-group igshop-dev-rg-v2 \
+          --name igshop-dev-yjhtoi-api \
+          --query "linuxFxVersion"
         
         # Set environment variables
         az webapp config appsettings set \
@@ -70,6 +79,12 @@ jobs:
             JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" \
             META_REDIRECT_URI="https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/callback" \
             SCM_DO_BUILD_DURING_DEPLOYMENT=true
+        
+        # Force restart to apply configuration
+        echo "🔄 Restarting app to apply configuration..."
+        az webapp restart \
+          --resource-group igshop-dev-rg-v2 \
+          --name igshop-dev-yjhtoi-api
         
     - name: Create deployment package
       run: |

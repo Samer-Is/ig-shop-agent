@@ -1,6 +1,7 @@
 """
 IG-Shop-Agent Production Flask Backend - LIVE SYSTEM
 Complete SaaS platform with Instagram OAuth, AI, Database - NO MOCK DATA
+DEPLOYMENT: Force Azure Python runtime configuration  
 """
 import os
 import logging
