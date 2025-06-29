@@ -57,4 +57,11 @@ jspm_packages/
 .eslintcache
 
 # Stores VSCode versions used for testing VSCode extensions
-.vscode-test 
+.vscode-test
+
+# Vite build output
+dist/
+.vite/
+
+# Azure Static Web Apps
+.azure/ 
