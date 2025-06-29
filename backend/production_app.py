@@ -33,6 +33,9 @@ app = Flask(__name__)
 # PRODUCTION Configuration - LIVE CREDENTIALS
 app.config['SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'change-in-production')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'  # Required for cross-origin cookies
 
 # Enable CORS for frontend
 CORS(app, 
@@ -44,6 +47,7 @@ CORS(app,
      ],
      supports_credentials=True,
      allow_headers=['Content-Type', 'Authorization'],
+     expose_headers=['Set-Cookie'],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 
 # Database configuration moved to unified database service
@@ -52,7 +56,7 @@ from database import db_service, get_db_connection
 # LIVE Instagram/Meta configuration
 app.config['META_APP_ID'] = os.environ.get('META_APP_ID', '1879578119651644')
 app.config['META_APP_SECRET'] = os.environ.get('META_APP_SECRET', 'f79b3350f43751d6139e1b29a232cbf3')
-app.config['META_REDIRECT_URI'] = os.environ.get('META_REDIRECT_URI', 'https://igshop-api.azurewebsites.net/auth/instagram/callback')
+app.config['META_REDIRECT_URI'] = os.environ.get('META_REDIRECT_URI', 'https://red-island-0b863450f.2.azurestaticapps.net/auth/callback')
 
 # LIVE OpenAI configuration
 from openai import OpenAI
@@ -112,10 +116,23 @@ def instagram_login():
         )
         
         logger.info(f"Generated Instagram auth URL with state {state}")
-        return jsonify({
+        response = jsonify({
             'auth_url': auth_url,
             'state': state
         })
+        
+        # Set cookie for state
+        response.set_cookie(
+            'oauth_state',
+            state,
+            secure=True,
+            httponly=True,
+            samesite='None',
+            max_age=3600  # 1 hour
+        )
+        
+        return response
+        
     except Exception as e:
         logger.error(f"Instagram auth error: {str(e)}")
         return jsonify({'error': 'Instagram auth failed'}), 500
@@ -130,7 +147,10 @@ def instagram_callback():
         if not code or not state:
             return jsonify({'error': 'Missing code or state'}), 400
         
-        if session.get('oauth_state') != state:
+        # Check state from cookie instead of session
+        stored_state = request.cookies.get('oauth_state')
+        if not stored_state or stored_state != state:
+            logger.error(f"Invalid state. Expected {stored_state}, got {state}")
             return jsonify({'error': 'Invalid state parameter'}), 400
         
         # Exchange code for access token using Facebook Graph API
@@ -185,8 +205,8 @@ def instagram_callback():
             logger.error(f"Failed to get Instagram details: {instagram_data}")
             return jsonify({'error': 'Failed to get Instagram account details'}), 400
             
-        # Return success with Instagram account data
-        return jsonify({
+        # Clear the oauth state cookie
+        response = jsonify({
             'success': True,
             'instagram_handle': instagram_data['username'],
             'token': instagram_page['access_token'],
@@ -198,6 +218,9 @@ def instagram_callback():
                 'profile_picture_url': instagram_data.get('profile_picture_url', '')
             }
         })
+        
+        response.set_cookie('oauth_state', '', expires=0)
+        return response
             
     except Exception as e:
         logger.error(f"Instagram callback error: {str(e)}")

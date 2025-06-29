@@ -4,7 +4,7 @@
  */
 
 // Use environment variable or fallback for API URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://igshop-api.azurewebsites.net';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://igshop-dev-yjhtoi-api.azurewebsites.net';
 
 // Import types from main types file
 import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
@@ -151,17 +151,17 @@ export class ApiService {
       headers: {
         'Content-Type': 'application/json',
       },
-      withCredentials: true // Important for session cookies
+      withCredentials: true  // Important for cookies
     });
 
-    // Add auth token to requests if available
-    this.api.interceptors.request.use((config) => {
-      const token = localStorage.getItem('auth_token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+    // Add response interceptor for error handling
+    this.api.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        console.error('API Error:', error.response?.data || error);
+        return Promise.reject(error);
       }
-      return config;
-    });
+    );
   }
 
   // Instagram OAuth
