@@ -1,22 +1,20 @@
 #!/bin/bash
 
 # Azure Web App startup script for Python Flask application
-echo "Starting IG-Shop-Agent Flask Backend..."
+echo "Starting IG-Shop-Agent Backend..."
 
-# Set environment variables if not already set
-export PORT=${PORT:-8080}
-export WEBSITES_PORT=${WEBSITES_PORT:-8080}
+# Set environment variables
+export PYTHONPATH=/home/site/wwwroot:$PYTHONPATH
+export PORT=${PORT:-8000}
 
-# Navigate to the application directory
+# Change to the application directory
 cd /home/site/wwwroot
 
-# Install dependencies if requirements.txt exists
-if [ -f requirements.txt ]; then
-    echo "Installing Python dependencies..."
-    python -m pip install --upgrade pip
-    python -m pip install -r requirements.txt
-fi
+# Install any missing dependencies
+echo "Installing dependencies..."
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 
-# Start the Flask application
-echo "Starting Flask app on port $PORT..."
-exec python app_simple.py 
+# Start the application with Gunicorn
+echo "Starting Gunicorn server on port $PORT..."
+exec gunicorn --bind=0.0.0.0:$PORT --timeout 600 --workers 1 --worker-class sync app_simple:app 
