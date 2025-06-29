@@ -19,7 +19,7 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  Refresh
+  RefreshCw
 } from 'lucide-react';
 import { productionApi, Analytics, CatalogItem, Order } from '@/services/productionApi';
 
@@ -137,7 +137,7 @@ const ProductionDashboard: React.FC = () => {
         onClick={loadDashboardData}
         disabled={state.isLoading}
       >
-        <Refresh className="w-3 h-3 mr-1" />
+        <RefreshCw className="w-3 h-3 mr-1" />
         Refresh
       </Button>
       
