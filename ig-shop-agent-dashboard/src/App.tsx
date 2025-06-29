@@ -3,21 +3,21 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from './components/ui/toaster';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import ProtectedRoute from './components/ProtectedRoute';
-import DashboardLayout from './components/layout/DashboardLayout';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { DashboardLayout } from './components/layout/DashboardLayout';
 
 // Import pages
-import Login from './pages/Login';
+import { Login } from './pages/Login';
 import ProductionDashboard from './components/ProductionDashboard';
-import Catalog from './pages/Catalog';
-import Orders from './pages/Orders';
-import Conversations from './pages/Conversations';
-import Analytics from './pages/Analytics';
-import BusinessProfile from './pages/BusinessProfile';
-import Settings from './pages/Settings';
-import KnowledgeBase from './pages/KnowledgeBase';
-import InstagramAgent from './pages/InstagramAgent';
-import OnboardingWizard from './pages/OnboardingWizard';
+import { Catalog } from './pages/Catalog';
+import { Orders } from './pages/Orders';
+import { Conversations } from './pages/Conversations';
+import { Analytics } from './pages/Analytics';
+import { BusinessProfile } from './pages/BusinessProfile';
+import { Settings } from './pages/Settings';
+import { KnowledgeBase } from './pages/KnowledgeBase';
+import { InstagramAgent } from './pages/InstagramAgent';
+import { OnboardingWizard } from './pages/OnboardingWizard';
 
 import './App.css';
 

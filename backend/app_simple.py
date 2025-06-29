@@ -13,6 +13,14 @@ from flask_cors import CORS
 import asyncio
 import asyncpg
 from functools import wraps
+import jwt
+import hashlib
+import time
+import requests
+import openai
+import csv
+import io
+from werkzeug.exceptions import RequestEntityTooLarge
 
 # Import our modules
 from config import settings
@@ -34,6 +42,8 @@ logger = logging.getLogger(__name__)
 # Create Flask app
 app = Flask(__name__)
 app.secret_key = settings.jwt_secret_key
+app.config['SECRET_KEY'] = settings.FLASK_SECRET_KEY
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Enable CORS for frontend
 CORS(app, 
@@ -617,6 +627,10 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_file_too_large(error):
+    return jsonify({'error': 'File too large. Maximum size is 16MB'}), 413
 
 if __name__ == '__main__':
     # For Azure Web App deployment - handle different port environment variables
