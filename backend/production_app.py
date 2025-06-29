@@ -61,7 +61,8 @@ app.config['META_APP_SECRET'] = os.environ.get('META_APP_SECRET', 'f79b3350f4375
 app.config['META_REDIRECT_URI'] = os.environ.get('META_REDIRECT_URI', 'https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/callback')
 
 # LIVE OpenAI configuration
-openai.api_key = os.environ.get('OPENAI_API_KEY', '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')
+from openai import OpenAI
+openai_client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY', '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'))
 
 # Initialize extensions
 db = SQLAlchemy(app)
@@ -168,7 +169,7 @@ def health_check():
         'timestamp': datetime.utcnow().isoformat(),
         'database': db_status,
         'instagram_oauth': 'configured' if app.config.get('META_APP_ID') else 'not_configured',
-        'openai': 'configured' if openai.api_key else 'not_configured'
+        'openai': 'configured' if openai_client.api_key else 'not_configured'
     })
 
 # LIVE Instagram OAuth
@@ -361,7 +362,7 @@ def add_catalog_item():
         if enhanced_description and len(enhanced_description) < 100:
             try:
                 ai_prompt = f"حسن وصف هذا المنتج: {data['name']} - {enhanced_description}"
-                response = openai.ChatCompletion.create(
+                response = openai_client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=[{"role": "user", "content": ai_prompt}],
                     max_tokens=200
@@ -476,7 +477,7 @@ def ai_chat():
             context += f"- {product.name}: {product.price_jod} دينار\n"
         context += "\nرد باللغة العربية الأردنية وساعد العملاء."
         
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": context},
@@ -503,14 +504,17 @@ def ai_chat():
         logger.error(f"AI chat error: {str(e)}")
         return jsonify({'error': 'AI chat failed'}), 500
 
-# Initialize database
-@app.before_first_request
+# Initialize database tables - Fixed for Flask 2.2+
 def create_tables():
     try:
-        db.create_all()
-        logger.info("Database tables created successfully")
+        with app.app_context():
+            db.create_all()
+            logger.info("Database tables created successfully")
     except Exception as e:
         logger.error(f"Database initialization error: {str(e)}")
+
+# Create tables when module loads
+create_tables()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
