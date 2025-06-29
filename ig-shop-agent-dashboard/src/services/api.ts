@@ -2,6 +2,9 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
   ? 'https://igshop-api.azurewebsites.net'  // Azure Web App URL (updated)
   : 'http://localhost:8000';  // Local Flask app
 
+// Import types from main types file
+import type { KBDocument, Conversation } from '../types';
+
 // API Response types matching Flask backend
 interface ApiResponse<T> {
   data?: T;
@@ -286,6 +289,18 @@ class ApiService {
   // Analytics
   async getDashboardAnalytics(): Promise<ApiResponse<DashboardAnalytics>> {
     return this.request('/api/analytics/dashboard');
+  }
+
+  // Knowledge Base
+  async getKnowledgeBase(): Promise<KBDocument[]> {
+    const response = await this.request<{ documents: KBDocument[] }>('/api/knowledge-base');
+    return response.data?.documents || [];
+  }
+
+  // Conversations
+  async getConversations(): Promise<Conversation[]> {
+    const response = await this.request<{ conversations: Conversation[] }>('/api/conversations');
+    return response.data?.conversations || [];
   }
 
   // Test connection

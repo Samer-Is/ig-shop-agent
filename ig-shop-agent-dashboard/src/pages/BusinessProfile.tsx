@@ -72,7 +72,9 @@ export function BusinessProfile() {
               language: 'arabic',
               greeting: 'أهلاً وسهلاً!'
             }
-          }
+          },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         };
         
         setProfile(defaultProfile);
