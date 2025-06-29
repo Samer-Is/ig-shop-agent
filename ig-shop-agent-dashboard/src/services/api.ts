@@ -10,6 +10,7 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
 
 // Import types from main types file
 import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
+import axios, { AxiosInstance } from 'axios';
 
 // API Response types matching Flask backend
 interface ApiResponse<T> {
@@ -144,155 +145,117 @@ interface AITestResponse {
   catalog_items_used: number;
 }
 
-class ApiService {
-  private baseUrl: string;
-  private authToken: string | null = null;
+export class ApiService {
+  private api: AxiosInstance;
 
-  constructor(baseUrl: string = API_BASE_URL) {
-    this.baseUrl = baseUrl;
-    // Try to get token from localStorage
-    this.authToken = localStorage.getItem('access_token');
+  constructor() {
+    this.api = axios.create({
+      baseURL: API_BASE_URL,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    // Add auth token to requests if available
+    this.api.interceptors.request.use((config) => {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
+  // Instagram OAuth
+  async getInstagramAuthUrl(): Promise<ApiResponse<{ auth_url: string }>> {
     try {
-      const url = `${this.baseUrl}${endpoint}`;
-      const defaultHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-
-      // Add auth token if available
-      if (this.authToken) {
-        defaultHeaders['Authorization'] = `Bearer ${this.authToken}`;
-      }
-
-      const response = await fetch(url, {
-        headers: { ...defaultHeaders, ...options.headers },
-        ...options,
-      });
-
-      let data;
-      try {
-        data = await response.json();
-      } catch {
-        data = await response.text();
-      }
-
-      return {
-        data: response.ok ? data : undefined,
-        error: response.ok ? undefined : data.error || data || 'Request failed',
-        status: response.status,
-      };
+      const response = await this.api.get('/auth/instagram/login');
+      return { data: response.data };
     } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Network error',
-        status: 0,
-      };
+      console.error('Failed to get Instagram auth URL:', error);
+      return { error: 'Failed to get Instagram authorization URL' };
     }
   }
 
-  // Set auth token
-  setAuthToken(token: string) {
-    this.authToken = token;
-    localStorage.setItem('access_token', token);
-  }
-
-  // Clear auth token
-  clearAuthToken() {
-    this.authToken = null;
-    localStorage.removeItem('access_token');
+  async handleInstagramCallback(code: string, state: string): Promise<ApiResponse> {
+    try {
+      const response = await this.api.post('/auth/instagram/callback', { code, state });
+      return { data: response.data };
+    } catch (error) {
+      console.error('Instagram callback error:', error);
+      return { error: 'Failed to complete Instagram authentication' };
+    }
   }
 
   // Health check
-  async healthCheck(): Promise<ApiResponse<any>> {
-    return this.request('/health');
+  async healthCheck(): Promise<ApiResponse> {
+    try {
+      const response = await this.api.get('/health');
+      return { data: response.data };
+    } catch (error) {
+      return { error: 'API health check failed' };
+    }
   }
 
   // Authentication - Updated to match backend
   async register(data: RegisterRequest): Promise<ApiResponse<AuthResponse>> {
-    return this.request('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async login(data: LoginRequest): Promise<ApiResponse<AuthResponse>> {
-    const response = await this.request<AuthResponse>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-
+    const response = await this.api.post('/auth/register', data);
     if (response.data?.token) {
-      this.setAuthToken(response.data.token);
+      localStorage.setItem('auth_token', response.data.token);
     }
-
     return response;
   }
 
-  // Instagram OAuth - Updated to match backend
-  async getInstagramAuthUrl(): Promise<ApiResponse<InstagramAuthResponse>> {
-    return this.request<InstagramAuthResponse>('/auth/instagram/login');
-  }
-
-  async handleInstagramCallback(code: string, state: string): Promise<ApiResponse<InstagramCallbackResponse>> {
-    return this.request<InstagramCallbackResponse>('/auth/instagram/callback', {
-      method: 'POST',
-      body: JSON.stringify({ code, state }),
-    });
+  async login(data: LoginRequest): Promise<ApiResponse<AuthResponse>> {
+    const response = await this.api.post('/auth/login', data);
+    if (response.data?.token) {
+      localStorage.setItem('auth_token', response.data.token);
+    }
+    return response;
   }
 
   // Catalog Management - Updated to match backend
   async getCatalog(): Promise<ApiResponse<CatalogItem[]>> {
-    return this.request('/api/catalog');
+    const response = await this.api.get('/api/catalog');
+    return response;
   }
 
   async createCatalogItem(item: CreateCatalogItemRequest): Promise<ApiResponse<{ id: number; message: string; enhanced_description: string }>> {
-    return this.request('/api/catalog', {
-      method: 'POST',
-      body: JSON.stringify(item),
-    });
+    const response = await this.api.post('/api/catalog', item);
+    return response;
   }
 
   async updateCatalogItem(itemId: number, item: Partial<CreateCatalogItemRequest>): Promise<ApiResponse<{ message: string }>> {
-    return this.request(`/api/catalog/${itemId}`, {
-      method: 'PUT',
-      body: JSON.stringify(item),
-    });
+    const response = await this.api.put(`/api/catalog/${itemId}`, item);
+    return response;
   }
 
   async deleteCatalogItem(itemId: number): Promise<ApiResponse<{ message: string }>> {
-    return this.request(`/api/catalog/${itemId}`, {
-      method: 'DELETE',
-    });
+    const response = await this.api.delete(`/api/catalog/${itemId}`);
+    return response;
   }
 
   // Order Management - Updated to match backend
   async getOrders(): Promise<ApiResponse<Order[]>> {
-    return this.request('/api/orders');
+    const response = await this.api.get('/api/orders');
+    return response;
   }
 
   async updateOrderStatus(orderId: number, status: string): Promise<ApiResponse<{ message: string }>> {
-    return this.request(`/api/orders/${orderId}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status }),
-    });
+    const response = await this.api.put(`/api/orders/${orderId}/status`, { status });
+    return response;
   }
 
   // AI Agent - Updated to match backend
   async testAIResponse(message: string): Promise<ApiResponse<AITestResponse>> {
-    return this.request('/api/ai/chat', {
-      method: 'POST',
-      body: JSON.stringify({ message }),
-    });
+    const response = await this.api.post('/api/ai/chat', { message });
+    return response;
   }
 
   // Analytics - Updated to match backend
   async getDashboardAnalytics(): Promise<ApiResponse<Analytics>> {
-    return this.request('/api/analytics');
+    const response = await this.api.get('/api/analytics');
+    return response;
   }
 
   // Knowledge Base - Placeholder (not implemented in backend yet)
@@ -319,16 +282,16 @@ class ApiService {
 
   // Additional methods to match frontend usage
   async verifyToken(): Promise<ApiResponse<{ valid: boolean }>> {
-    if (!this.authToken) {
+    if (!localStorage.getItem('auth_token')) {
       return { data: { valid: false }, status: 200 };
     }
     
-    const response = await this.request('/health');
+    const response = await this.healthCheck();
     return { data: { valid: response.status === 200 }, status: response.status };
   }
 
   isAuthenticated(): boolean {
-    return !!this.authToken;
+    return !!localStorage.getItem('auth_token');
   }
 }
 
