@@ -57,13 +57,15 @@ export function Catalog() {
         setError(null);
         const response = await apiService.getCatalog(100, 0, selectedCategory === 'all' ? undefined : selectedCategory, searchTerm);
         
-        if (response.data) {
+        if (response.data && response.data.items) {
           setProducts(response.data.items);
         } else {
           setError(response.error || 'Failed to load products');
+          setProducts([]); // Set empty array on error
         }
       } catch (err) {
         setError('Failed to load products');
+        setProducts([]); // Set empty array on error
       } finally {
         setIsLoading(false);
       }

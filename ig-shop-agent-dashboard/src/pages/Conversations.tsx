@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -16,7 +16,9 @@ import {
   Zap,
   Clock,
   DollarSign,
-  Activity
+  Activity,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { Conversation, ChatMessage } from '../types';
@@ -25,6 +27,28 @@ export function Conversations() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load conversations from API
+  useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const data = await apiService.getConversations();
+        setConversations(data);
+      } catch (err) {
+        setError('Failed to load conversations');
+        console.error('Failed to load conversations:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadConversations();
+  }, []);
 
   // Group conversations by sender (simulate chat threads)
   const chatThreads = conversations.reduce((acc, conv) => {
@@ -35,12 +59,19 @@ export function Conversations() {
     return acc;
   }, {} as Record<string, Conversation[]>);
 
-  const threadList = Object.entries(chatThreads).map(([sender, messages]) => ({
-    sender,
-    messages: messages.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime()),
-    lastMessage: messages[messages.length - 1],
-    unreadCount: Math.floor(Math.random() * 3) // Mock unread count
-  }));
+  const threadList = Object.entries(chatThreads).map(([sender, messages]) => {
+    // Ensure messages is an array before sorting
+    const sortedMessages = Array.isArray(messages) 
+      ? messages.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
+      : [];
+    
+    return {
+      sender,
+      messages: sortedMessages,
+      lastMessage: sortedMessages[sortedMessages.length - 1],
+      unreadCount: Math.floor(Math.random() * 3) // Mock unread count
+    };
+  });
 
   const filteredThreads = threadList.filter(thread =>
     thread.sender.toLowerCase().includes(searchTerm.toLowerCase())
@@ -61,7 +92,10 @@ export function Conversations() {
   const conversationStats = {
     total: Object.keys(chatThreads).length,
     active: Object.keys(chatThreads).filter(sender => {
-      const lastMessage = chatThreads[sender][chatThreads[sender].length - 1];
+      const senderMessages = chatThreads[sender];
+      if (!Array.isArray(senderMessages) || senderMessages.length === 0) return false;
+      
+      const lastMessage = senderMessages[senderMessages.length - 1];
       const dayAgo = new Date();
       dayAgo.setDate(dayAgo.getDate() - 1);
       return new Date(lastMessage.ts) > dayAgo;
@@ -69,6 +103,50 @@ export function Conversations() {
     avgResponseTime: 1.2,
     totalTokensToday: conversations.reduce((sum, conv) => sum + conv.tokens_in + conv.tokens_out, 0)
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Conversations</h1>
+            <p className="text-slate-500 mt-1">Loading conversations...</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <span className="ml-3 text-slate-600">Loading conversations...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Conversations</h1>
+            <p className="text-slate-500 mt-1">Monitor and manage AI conversations with customers</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">Failed to Load Conversations</h3>
+              <p className="text-slate-500 mb-4">{error}</p>
+              <Button onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

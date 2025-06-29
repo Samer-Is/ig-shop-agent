@@ -72,12 +72,18 @@ export interface BusinessProfile {
     business_name: string;
     description: string;
     contact_info: {
-      phone: string;
       email: string;
+      phone: string;
       address: string;
     };
     operating_hours: {
-      [key: string]: string;
+      sunday: string;
+      monday: string;
+      tuesday: string;
+      wednesday: string;
+      thursday: string;
+      friday: string;
+      saturday: string;
     };
     policies: {
       shipping: string;
@@ -87,7 +93,8 @@ export interface BusinessProfile {
     ai_personality: {
       tone: string;
       language: string;
-      response_style: string;
+      greeting: string;
+      response_style?: string;
     };
   };
   created_at: string;

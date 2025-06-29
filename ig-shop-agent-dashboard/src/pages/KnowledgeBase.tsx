@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -37,15 +37,38 @@ import {
   BookOpen,
   Database,
   Zap,
-  FileCheck
+  FileCheck,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { KBDocument } from '../types';
 
 export function KnowledgeBase() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [documents] = useState<KBDocument[]>(kbDocuments);
+  const [documents, setDocuments] = useState<KBDocument[]>([]);
   const [selectedDoc, setSelectedDoc] = useState<KBDocument | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load documents from API
+  useEffect(() => {
+    const loadDocuments = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const data = await apiService.getKnowledgeBase();
+        setDocuments(data);
+      } catch (err) {
+        setError('Failed to load knowledge base');
+        console.error('Failed to load knowledge base:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadDocuments();
+  }, []);
 
   const filteredDocuments = documents.filter(doc =>
     doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -80,6 +103,50 @@ export function KnowledgeBase() {
     vectorized: documents.filter(doc => doc.vector_id).length,
     categories: new Set(documents.map(doc => doc.file_type)).size
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Knowledge Base</h1>
+            <p className="text-slate-500 mt-1">Loading documents...</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <span className="ml-3 text-slate-600">Loading knowledge base...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Knowledge Base</h1>
+            <p className="text-slate-500 mt-1">Manage documents and train your AI agent</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">Failed to Load Knowledge Base</h3>
+              <p className="text-slate-500 mb-4">{error}</p>
+              <Button onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

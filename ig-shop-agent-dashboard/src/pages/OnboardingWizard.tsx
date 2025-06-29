@@ -38,12 +38,12 @@ export function OnboardingWizard() {
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile>({
     instagram_handle: '',
     business_name: '',
-    intro_message: 'أهلاً وسهلاً! أنا مساعد متجر {business_name}. كيف يمكنني مساعدتك اليوم؟',
-    delivery_info: 'نوصل لكل أنحاء الأردن خلال 24-48 ساعة. التوصيل مجاني للطلبات فوق 50 دينار.',
-    return_policy: 'يمكن إرجاع أو استبدال المنتجات خلال 7 أيام من تاريخ الاستلام.',
-    special_offers: 'خصم 10% على الطلب الأول! استخدم الكود: WELCOME10',
-    brand_voice: 'ودود، مفيد، يستخدم اللهجة الأردنية بطريقة طبيعية ومريحة',
-    business_hours: 'السبت - الخميس: 9:00 ص - 9:00 م | الجمعة: 2:00 م - 9:00 م',
+    intro_message: '',
+    delivery_info: '',
+    return_policy: '',
+    special_offers: '',
+    brand_voice: '',
+    business_hours: '',
     contact_phone: ''
   });
 
@@ -70,7 +70,7 @@ export function OnboardingWizard() {
       id: 'profile',
       title: 'Business Profile',
       description: 'Configure AI personality and responses',
-      completed: Object.values(businessProfile).every(v => v.length > 0)
+      completed: Object.values(businessProfile).every((v: string) => v && v.length > 0)
     }
   ];
 

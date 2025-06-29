@@ -11,16 +11,14 @@ import os
 from typing import Optional
 
 # Import routes
-from routes.auth import router as auth_router
-from routes.catalog import router as catalog_router
-from routes.orders import router as orders_router
-from routes.conversations import router as conversations_router
-from routes.analytics import router as analytics_router
-from routes.ai_agent import router as ai_router
+from .routes.auth import router as auth_router
+from .routes.catalog import router as catalog_router  
+from .routes.orders import router as orders_router
+from .routes.additional import router as additional_router
 
 # Import services
-from services.database import init_database, close_database
-from services.auth import verify_token
+from .database import db_service, database_lifespan
+from .services.auth import AuthService
 
 # Configure logging
 logging.basicConfig(
@@ -37,14 +35,15 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup
     logger.info("🚀 Starting IG-Shop-Agent FastAPI backend...")
-    await init_database()
+    await db_service.connect()
+    await db_service.initialize_schema()
     logger.info("✅ Database initialized")
     
     yield
     
     # Shutdown
     logger.info("🔄 Shutting down IG-Shop-Agent FastAPI backend...")
-    await close_database()
+    await db_service.disconnect()
     logger.info("✅ Database connections closed")
 
 # Create FastAPI application
@@ -86,15 +85,21 @@ async def health_check():
 async def detailed_health_check():
     """Detailed health check with service dependencies"""
     try:
-        # TODO: Add database ping, Azure services check
+        # Check database health
+        db_health = await db_service.health_check()
+        
         return {
             "status": "healthy",
             "service": "ig-shop-agent-api",
             "version": "1.0.0",
             "environment": os.getenv("ENVIRONMENT", "development"),
-            "database": "connected",
-            "azure_openai": "connected",
-            "instagram_api": "connected"
+            "database": db_health,
+            "components": {
+                "fastapi": "running",
+                "postgresql": db_health["status"],
+                "instagram_api": "available",
+                "openai": "available"
+            }
         }
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
@@ -105,19 +110,21 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
     """Dependency to get current authenticated user"""
     try:
         token = credentials.credentials
-        user_data = await verify_token(token)
-        return user_data
+        payload = AuthService.verify_token(token)
+        return {
+            "user_id": payload.get("user_id"),
+            "username": payload.get("username"),
+            "tenant_id": payload.get("tenant_id")
+        }
     except Exception as e:
         logger.error(f"Authentication failed: {str(e)}")
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 # Include routers
-app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
-app.include_router(catalog_router, prefix="/api/catalog", tags=["Catalog"], dependencies=[Depends(get_current_user)])
-app.include_router(orders_router, prefix="/api/orders", tags=["Orders"], dependencies=[Depends(get_current_user)])
-app.include_router(conversations_router, prefix="/api/conversations", tags=["Conversations"], dependencies=[Depends(get_current_user)])
-app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"], dependencies=[Depends(get_current_user)])
-app.include_router(ai_router, prefix="/api/ai", tags=["AI Agent"], dependencies=[Depends(get_current_user)])
+app.include_router(auth_router, tags=["Authentication"])
+app.include_router(catalog_router, tags=["Catalog"])
+app.include_router(orders_router, tags=["Orders"])
+app.include_router(additional_router, tags=["Additional"])
 
 # Root endpoint
 @app.get("/")

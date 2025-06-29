@@ -60,13 +60,15 @@ export function Orders() {
         setError(null);
         const response = await apiService.getOrders(100, 0, selectedStatus === 'all' ? undefined : selectedStatus);
         
-        if (response.data) {
+        if (response.data && response.data.orders) {
           setOrderList(response.data.orders);
         } else {
           setError(response.error || 'Failed to load orders');
+          setOrderList([]); // Set empty array on error
         }
       } catch (err) {
         setError('Failed to load orders');
+        setOrderList([]); // Set empty array on error
       } finally {
         setIsLoading(false);
       }

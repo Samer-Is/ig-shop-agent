@@ -38,16 +38,20 @@ interface TokenVerifyResponse {
   tenant_id: string;
 }
 
-// Catalog interfaces
+// Catalog interfaces - matching database schema
 interface CatalogItem {
   id: string;
+  tenant_id: string;
   sku: string;
   name: string;
   price_jod: number;
+  media_url: string;
+  extras: Record<string, any>;
   description?: string;
   category?: string;
   stock_quantity?: number;
-  media_url?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface CatalogResponse {
@@ -67,18 +71,20 @@ interface CreateCatalogItemRequest {
   media_url?: string;
 }
 
-// Order interfaces  
+// Order interfaces - matching database schema
 interface Order {
   id: string;
+  tenant_id: string;
   sku: string;
   qty: number;
   customer: string;
   phone: string;
-  status: string;
+  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
   total_amount: number;
+  created_at: string;
+  updated_at: string;
   delivery_address?: string;
   notes?: string;
-  created_at: string;
 }
 
 interface OrdersResponse {

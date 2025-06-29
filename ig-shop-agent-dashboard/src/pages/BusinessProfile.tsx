@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -23,68 +23,187 @@ import {
   Save,
   RotateCcw,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { BusinessProfile as BusinessProfileType } from '../types';
 
 export function BusinessProfile() {
-  const [profile, setProfile] = useState<BusinessProfileType>(businessProfile);
+  const [profile, setProfile] = useState<BusinessProfileType | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSave = () => {
-    // Mock save operation
-    console.log('Saving profile:', profile);
-    setHasChanges(false);
+  // Load profile from API
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // Create default profile structure for now
+        const defaultProfile: BusinessProfileType = {
+          tenant_id: 'current',
+          yaml_profile: {
+            business_name: 'Your Business',
+            description: '',
+            contact_info: {
+              email: '',
+              phone: '',
+              address: ''
+            },
+            operating_hours: {
+              sunday: '9:00 AM - 6:00 PM',
+              monday: '9:00 AM - 6:00 PM',
+              tuesday: '9:00 AM - 6:00 PM',
+              wednesday: '9:00 AM - 6:00 PM',
+              thursday: '9:00 AM - 6:00 PM',
+              friday: '9:00 AM - 6:00 PM',
+              saturday: '9:00 AM - 6:00 PM'
+            },
+            policies: {
+              shipping: '',
+              returns: '',
+              payment: ''
+            },
+            ai_personality: {
+              tone: 'friendly',
+              language: 'arabic',
+              greeting: 'أهلاً وسهلاً!'
+            }
+          }
+        };
+        
+        setProfile(defaultProfile);
+      } catch (err) {
+        setError('Failed to load business profile');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, []);
+
+  const handleSave = async () => {
+    if (!profile) return;
+    try {
+      // TODO: Implement API call to save profile
+      console.log('Saving profile:', profile);
+      setHasChanges(false);
+    } catch (err) {
+      setError('Failed to save profile');
+    }
   };
 
   const handleReset = () => {
-    setProfile(businessProfile);
-    setHasChanges(false);
+    if (profile) {
+      // Reset to original loaded state
+      setHasChanges(false);
+    }
   };
 
   const updateProfile = (section: string, field: string, value: any) => {
-    setProfile(prev => ({
-      ...prev,
-      yaml_profile: {
-        ...prev.yaml_profile,
-        [section]: {
-          ...prev.yaml_profile[section],
-          [field]: value
+    setProfile(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        yaml_profile: {
+          ...prev.yaml_profile,
+          [section]: {
+            ...prev.yaml_profile[section],
+            [field]: value
+          }
         }
-      }
-    }));
+      };
+    });
     setHasChanges(true);
   };
 
   const updateBasicInfo = (field: string, value: string) => {
-    setProfile(prev => ({
-      ...prev,
-      yaml_profile: {
-        ...prev.yaml_profile,
-        [field]: value
-      }
-    }));
+    setProfile(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        yaml_profile: {
+          ...prev.yaml_profile,
+          [field]: value
+        }
+      };
+    });
     setHasChanges(true);
   };
 
   const updateOperatingHours = (day: string, hours: string) => {
-    setProfile(prev => ({
-      ...prev,
-      yaml_profile: {
-        ...prev.yaml_profile,
-        operating_hours: {
-          ...prev.yaml_profile.operating_hours,
-          [day]: hours
+    setProfile(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        yaml_profile: {
+          ...prev.yaml_profile,
+          operating_hours: {
+            ...prev.yaml_profile.operating_hours,
+            [day]: hours
+          }
         }
-      }
-    }));
+      };
+    });
     setHasChanges(true);
   };
 
   const weekdays = [
     'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'
   ];
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Business Profile</h1>
+            <p className="text-slate-500 mt-1">Loading profile...</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <span className="ml-3 text-slate-600">Loading business profile...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Business Profile</h1>
+            <p className="text-slate-500 mt-1">Configure your business information and AI agent personality</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">Failed to Load Profile</h3>
+              <p className="text-slate-500 mb-4">{error}</p>
+              <Button onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Null check
+  if (!profile) {
+    return null;
+  }
 
   return (
     <div className="space-y-6">
@@ -335,10 +454,20 @@ export function BusinessProfile() {
                 <Label htmlFor="response_style">Response Style</Label>
                 <Textarea
                   id="response_style"
-                  value={profile.yaml_profile.ai_personality.response_style}
+                  value={profile.yaml_profile.ai_personality.response_style || ''}
                   onChange={(e) => updateProfile('ai_personality', 'response_style', e.target.value)}
                   placeholder="Describe how the AI should respond to customers..."
                   rows={3}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="greeting">Greeting Message</Label>
+                <Input
+                  id="greeting"
+                  value={profile.yaml_profile.ai_personality.greeting}
+                  onChange={(e) => updateProfile('ai_personality', 'greeting', e.target.value)}
+                  placeholder="أهلاً وسهلاً! كيف يمكنني مساعدتك؟"
                 />
               </div>
 
