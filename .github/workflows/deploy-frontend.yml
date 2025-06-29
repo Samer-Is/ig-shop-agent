@@ -38,17 +38,11 @@ jobs:
           
       - name: Set environment variables
         run: |
+          # Determine environment (dev/staging/prod) if provided via workflow dispatch, default to dev
           ENV="${{ github.event.inputs.environment || 'dev' }}"
           echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
-          
-          # Set Static Web App token based on environment
-          if [ "$ENV" = "dev" ]; then
-            echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DEV }}" >> $GITHUB_ENV
-          elif [ "$ENV" = "staging" ]; then
-            echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_STAGING }}" >> $GITHUB_ENV
-          else
-            echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROD }}" >> $GITHUB_ENV
-          fi
+          # Use single unified deployment token provided as secret
+          echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}" >> $GITHUB_ENV
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
