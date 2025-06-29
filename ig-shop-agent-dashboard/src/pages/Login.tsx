@@ -1,42 +1,97 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Checkbox } from '../components/ui/checkbox';
 import { Badge } from '../components/ui/badge';
+import { Alert, AlertDescription } from '../components/ui/alert';
+import { apiService } from '../services/api';
 import { 
   Bot, 
   Instagram, 
   Shield, 
-  Mail, 
-  Lock,
-  Eye,
-  EyeOff,
   ArrowRight,
-  CheckCircle
+  CheckCircle,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 
 export function Login() {
   const navigate = useNavigate();
-  const [showPassword, setShowPassword] = useState(false);
+  const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    rememberMe: false
-  });
+  const [error, setError] = useState<string | null>(null);
+  const [businessName, setBusinessName] = useState('');
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Handle Instagram OAuth callback
+  useEffect(() => {
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
+    const error = searchParams.get('error');
+
+    if (error) {
+      setError(`Instagram OAuth error: ${error}`);
+      return;
+    }
+
+    if (code && state) {
+      handleInstagramCallback(code, state);
+    }
+  }, [searchParams]);
+
+  const handleInstagramCallback = async (code: string, state: string) => {
     setIsLoading(true);
-    
-    // Mock login - in real app, you'd make API call
-    setTimeout(() => {
+    setError(null);
+
+    try {
+      const response = await apiService.handleInstagramCallback(
+        code, 
+        state, 
+        `${window.location.origin}/login`
+      );
+
+      if (response.data?.success) {
+        // Store the session token
+        apiService.setAuthToken(response.data.session_token);
+        
+        // Store user info in localStorage for easy access
+        localStorage.setItem('ig_user', JSON.stringify(response.data.user));
+        localStorage.setItem('ig_tenant_id', response.data.tenant_id);
+        
+        // Navigate to dashboard
+        navigate('/');
+      } else {
+        setError(response.error || 'Authentication failed');
+      }
+    } catch (err) {
+      setError('Network error during authentication');
+    } finally {
       setIsLoading(false);
-      navigate('/');
-    }, 1500);
+    }
+  };
+
+  const handleInstagramLogin = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiService.getInstagramAuthUrl(
+        businessName, 
+        `${window.location.origin}/login`
+      );
+
+      if (response.data?.auth_url) {
+        // Redirect to Instagram OAuth
+        window.location.href = response.data.auth_url;
+      } else {
+        setError(response.error || 'Failed to generate Instagram auth URL');
+        setIsLoading(false);
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+      setIsLoading(false);
+    }
   };
 
   const features = [
@@ -113,88 +168,83 @@ export function Login() {
                   </div>
                 </div>
               </div>
-              <CardTitle className="text-2xl font-bold text-center">Welcome back</CardTitle>
+              <CardTitle className="text-2xl font-bold text-center">Connect Your Instagram</CardTitle>
               <p className="text-slate-600 text-center">
-                Sign in to your account to continue
+                Link your Instagram Business account to get started
               </p>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleLogin} className="space-y-6">
+              {error && (
+                <Alert className="mb-6 border-red-200 bg-red-50">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-700">
+                    {error}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email address</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="admin@jordanfashion.com"
-                      value={formData.email}
-                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                    <Input
-                      id="password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Enter your password"
-                      value={formData.password}
-                      onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                      className="pl-10 pr-10"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="remember"
-                      checked={formData.rememberMe}
-                      onCheckedChange={(checked) => 
-                        setFormData(prev => ({ ...prev, rememberMe: checked as boolean }))
-                      }
-                    />
-                    <Label htmlFor="remember" className="text-sm font-normal">
-                      Remember me
-                    </Label>
-                  </div>
-                  <Button variant="link" className="px-0 text-sm">
-                    Forgot password?
-                  </Button>
+                  <Label htmlFor="businessName">Business Name (Optional)</Label>
+                  <Input
+                    id="businessName"
+                    type="text"
+                    placeholder="e.g., Jordan Fashion Store"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    disabled={isLoading}
+                  />
+                  <p className="text-xs text-slate-500">
+                    This helps us identify your store during setup
+                  </p>
                 </div>
                 
                 <Button 
-                  type="submit" 
-                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                  onClick={handleInstagramLogin}
+                  className="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700"
                   disabled={isLoading}
+                  size="lg"
                 >
                   {isLoading ? (
                     <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Signing in...
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Connecting to Instagram...
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      Sign in
+                      <Instagram className="w-5 h-5" />
+                      Connect with Instagram
                       <ArrowRight className="w-4 h-4" />
                     </div>
                   )}
                 </Button>
-              </form>
+
+                <div className="text-center">
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-slate-200" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white px-2 text-slate-500">How it works</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 text-sm text-slate-600">
+                  <div className="flex items-start gap-2">
+                    <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold mt-0.5">1</div>
+                    <p>Connect your Instagram Business account</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold mt-0.5">2</div>
+                    <p>Upload your product catalog and business info</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold mt-0.5">3</div>
+                    <p>Start receiving AI-powered Instagram DM responses</p>
+                  </div>
+                </div>
+              </div>
               
               <div className="mt-6 pt-6 border-t border-slate-200">
                 <p className="text-center text-sm text-slate-600">

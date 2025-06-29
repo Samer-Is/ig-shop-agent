@@ -1,52 +1,133 @@
-const API_BASE_URL = 'https://igshop-dev-functions-v2.azurewebsites.net/api';
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://igshop-api.azurewebsites.net'  // Azure Web App URL (updated)
+  : 'http://localhost:8000';  // Local Flask app
 
-// API Response types
+// API Response types matching Flask backend
 interface ApiResponse<T> {
   data?: T;
   error?: string;
   status: number;
 }
 
-interface LoginRequest {
-  email: string;
-  password: string;
+// Authentication interfaces
+interface InstagramAuthResponse {
+  auth_url: string;
+  state: string;
 }
 
-interface LoginResponse {
+interface InstagramCallbackResponse {
   success: boolean;
-  token: string;
+  session_token: string;
+  tenant_id: string;
   user: {
     id: string;
-    email: string;
+    username: string;
     name: string;
   };
+  instagram_accounts: Array<{
+    id: string;
+    username: string;
+    name: string;
+  }>;
 }
 
-interface Product {
+interface TokenVerifyResponse {
+  valid: boolean;
+  user_id: string;
+  username: string;
+  tenant_id: string;
+}
+
+// Catalog interfaces
+interface CatalogItem {
   id: string;
+  sku: string;
   name: string;
-  name_en: string;
-  price: number;
-  currency: string;
-  description: string;
-  description_en: string;
-  image: string;
-  in_stock: boolean;
-  category: string;
+  price_jod: number;
+  description?: string;
+  category?: string;
+  stock_quantity?: number;
+  media_url?: string;
 }
 
 interface CatalogResponse {
-  products: Product[];
+  items: CatalogItem[];
   total: number;
-  page: number;
-  per_page: number;
+  limit: number;
+  offset: number;
+}
+
+interface CreateCatalogItemRequest {
+  sku: string;
+  name: string;
+  price_jod: number;
+  description?: string;
+  category?: string;
+  stock_quantity?: number;
+  media_url?: string;
+}
+
+// Order interfaces  
+interface Order {
+  id: string;
+  sku: string;
+  qty: number;
+  customer: string;
+  phone: string;
+  status: string;
+  total_amount: number;
+  delivery_address?: string;
+  notes?: string;
+  created_at: string;
+}
+
+interface OrdersResponse {
+  orders: Order[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+interface CreateOrderRequest {
+  sku: string;
+  qty: number;
+  customer: string;
+  phone: string;
+  total_amount: number;
+  delivery_address?: string;
+  notes?: string;
+}
+
+// AI interfaces
+interface AITestRequest {
+  message: string;
+}
+
+interface AITestResponse {
+  success: boolean;
+  response: string;
+  processed_at: string;
+}
+
+// Analytics interfaces
+interface DashboardAnalytics {
+  total_orders: number;
+  total_revenue: number;
+  total_products: number;
+  pending_orders: number;
+  confirmed_orders: number;
+  recent_orders: Order[];
+  top_products: CatalogItem[];
 }
 
 class ApiService {
   private baseUrl: string;
+  private authToken: string | null = null;
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
+    // Load token from localStorage
+    this.authToken = localStorage.getItem('ig_session_token');
   }
 
   private async request<T>(
@@ -55,21 +136,31 @@ class ApiService {
   ): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseUrl}${endpoint}`;
-      const defaultHeaders = {
+      const defaultHeaders: Record<string, string> = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       };
+
+      // Add auth token if available
+      if (this.authToken) {
+        defaultHeaders['Authorization'] = `Bearer ${this.authToken}`;
+      }
 
       const response = await fetch(url, {
         headers: { ...defaultHeaders, ...options.headers },
         ...options,
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        data = await response.text();
+      }
 
       return {
         data: response.ok ? data : undefined,
-        error: response.ok ? undefined : data.error || 'Request failed',
+        error: response.ok ? undefined : data.error || data || 'Request failed',
         status: response.status,
       };
     } catch (error) {
@@ -80,22 +171,115 @@ class ApiService {
     }
   }
 
+  // Set auth token
+  setAuthToken(token: string) {
+    this.authToken = token;
+    localStorage.setItem('ig_session_token', token);
+  }
+
+  // Clear auth token
+  clearAuthToken() {
+    this.authToken = null;
+    localStorage.removeItem('ig_session_token');
+  }
+
   // Health check
-  async healthCheck(): Promise<ApiResponse<{ status: string; version: string }>> {
+  async healthCheck(): Promise<ApiResponse<{ status: string; service: string; version: string }>> {
     return this.request('/health');
   }
 
+  async detailedHealthCheck(): Promise<ApiResponse<any>> {
+    return this.request('/api/health');
+  }
+
   // Authentication
-  async login(credentials: LoginRequest): Promise<ApiResponse<LoginResponse>> {
-    return this.request('/auth/login', {
+  async getInstagramAuthUrl(businessName: string = '', redirectUri: string = ''): Promise<ApiResponse<InstagramAuthResponse>> {
+    const params = new URLSearchParams();
+    if (businessName) params.append('business_name', businessName);
+    if (redirectUri) params.append('redirect_uri', redirectUri);
+    
+    return this.request(`/auth/instagram?${params.toString()}`);
+  }
+
+  async handleInstagramCallback(code: string, state: string, redirectUri: string = ''): Promise<ApiResponse<InstagramCallbackResponse>> {
+    const params = new URLSearchParams({ code, state });
+    if (redirectUri) params.append('redirect_uri', redirectUri);
+    
+    return this.request(`/auth/callback?${params.toString()}`);
+  }
+
+  async verifyToken(): Promise<ApiResponse<TokenVerifyResponse>> {
+    return this.request('/auth/verify', { method: 'POST' });
+  }
+
+  // Catalog Management
+  async getCatalog(limit: number = 50, offset: number = 0, category?: string, search?: string): Promise<ApiResponse<CatalogResponse>> {
+    const params = new URLSearchParams({ 
+      limit: limit.toString(), 
+      offset: offset.toString() 
+    });
+    if (category) params.append('category', category);
+    if (search) params.append('search', search);
+    
+    return this.request(`/api/catalog?${params.toString()}`);
+  }
+
+  async createCatalogItem(item: CreateCatalogItemRequest): Promise<ApiResponse<{ success: boolean; item_id: string; message: string }>> {
+    return this.request('/api/catalog', {
       method: 'POST',
-      body: JSON.stringify(credentials),
+      body: JSON.stringify(item),
     });
   }
 
-  // Catalog
-  async getCatalog(): Promise<ApiResponse<CatalogResponse>> {
-    return this.request('/catalog');
+  async updateCatalogItem(itemId: string, item: Partial<CreateCatalogItemRequest>): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    return this.request(`/api/catalog/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify(item),
+    });
+  }
+
+  async deleteCatalogItem(itemId: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    return this.request(`/api/catalog/${itemId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Order Management
+  async getOrders(limit: number = 50, offset: number = 0, status?: string): Promise<ApiResponse<OrdersResponse>> {
+    const params = new URLSearchParams({ 
+      limit: limit.toString(), 
+      offset: offset.toString() 
+    });
+    if (status) params.append('status', status);
+    
+    return this.request(`/api/orders?${params.toString()}`);
+  }
+
+  async createOrder(order: CreateOrderRequest): Promise<ApiResponse<{ success: boolean; order_id: string; message: string }>> {
+    return this.request('/api/orders', {
+      method: 'POST',
+      body: JSON.stringify(order),
+    });
+  }
+
+  async updateOrderStatus(orderId: string, status: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    return this.request(`/api/orders/${orderId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  // AI Agent
+  async testAIResponse(message: string): Promise<ApiResponse<AITestResponse>> {
+    return this.request('/api/ai/test-response', {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
+  }
+
+  // Analytics
+  async getDashboardAnalytics(): Promise<ApiResponse<DashboardAnalytics>> {
+    return this.request('/api/analytics/dashboard');
   }
 
   // Test connection
@@ -115,10 +299,18 @@ export const apiService = new ApiService();
 // Export types
 export type {
   ApiResponse,
-  LoginRequest,
-  LoginResponse,
-  Product,
+  InstagramAuthResponse,
+  InstagramCallbackResponse,
+  TokenVerifyResponse,
+  CatalogItem,
   CatalogResponse,
+  CreateCatalogItemRequest,
+  Order,
+  OrdersResponse,
+  CreateOrderRequest,
+  AITestRequest,
+  AITestResponse,
+  DashboardAnalytics,
 };
 
 // Utility function to check if API is available

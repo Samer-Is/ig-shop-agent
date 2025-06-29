@@ -1,7 +1,10 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Progress } from '../components/ui/progress';
+import { Alert, AlertDescription } from '../components/ui/alert';
+import { apiService, type DashboardAnalytics, type Order } from '../services/api';
 import { 
   MessageCircle, 
   ShoppingCart, 
@@ -12,69 +15,142 @@ import {
   Star,
   ArrowUpRight,
   ArrowDownRight,
-  Eye
+  Eye,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
-import { dashboardStats, orders, conversations } from '../data/mockData';
 
 export function Dashboard() {
-  const stats = [
+  const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load dashboard data
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await apiService.getDashboardAnalytics();
+        
+        if (response.data) {
+          setAnalytics(response.data);
+        } else {
+          setError(response.error || 'Failed to load dashboard data');
+        }
+      } catch (err) {
+        setError('Network error loading dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, []);
+
+  // Create stats array from real data
+  const stats = analytics ? [
     {
-      title: 'Total Conversations',
-      value: dashboardStats.total_conversations.toLocaleString(),
+      title: 'Total Orders',
+      value: analytics.total_orders.toLocaleString(),
       change: '+12.5%',
-      changeType: 'positive' as const,
-      icon: MessageCircle,
-      color: 'bg-blue-500'
-    },
-    {
-      title: 'Active Orders',
-      value: dashboardStats.active_orders.toString(),
-      change: '+8.2%',
       changeType: 'positive' as const,
       icon: ShoppingCart,
       color: 'bg-green-500'
     },
     {
-      title: 'Monthly Revenue',
-      value: `${dashboardStats.revenue_this_month.toLocaleString()} JOD`,
+      title: 'Total Revenue',
+      value: `${analytics.total_revenue.toLocaleString()} JOD`,
       change: '+23.1%',
       changeType: 'positive' as const,
       icon: DollarSign,
       color: 'bg-emerald-500'
     },
     {
-      title: 'AI Cost This Month',
-      value: `$${dashboardStats.ai_cost_this_month.toFixed(2)}`,
-      change: '-5.3%',
-      changeType: 'negative' as const,
-      icon: TrendingUp,
-      color: 'bg-orange-500'
-    }
-  ];
-
-  const performanceMetrics = [
-    {
-      label: 'Customer Satisfaction',
-      value: dashboardStats.customer_satisfaction,
-      max: 5,
-      unit: '★',
-      color: 'bg-yellow-500'
-    },
-    {
-      label: 'Avg Response Time',
-      value: dashboardStats.response_time_avg,
-      max: 5,
-      unit: 'min',
+      title: 'Total Products',
+      value: analytics.total_products.toString(),
+      change: '+8.2%',
+      changeType: 'positive' as const,
+      icon: MessageCircle,
       color: 'bg-blue-500'
     },
     {
-      label: 'Conversion Rate',
-      value: dashboardStats.conversion_rate,
+      title: 'Pending Orders',
+      value: analytics.pending_orders.toString(),
+      change: '-5.3%',
+      changeType: 'negative' as const,
+      icon: Clock,
+      color: 'bg-orange-500'
+    }
+  ] : [];
+
+  const performanceMetrics = [
+    {
+      label: 'Order Conversion',
+      value: analytics ? Math.round((analytics.confirmed_orders / analytics.total_orders) * 100) : 0,
       max: 100,
       unit: '%',
       color: 'bg-green-500'
+    },
+    {
+      label: 'Pending Rate', 
+      value: analytics ? Math.round((analytics.pending_orders / analytics.total_orders) * 100) : 0,
+      max: 100,
+      unit: '%',
+      color: 'bg-orange-500'
+    },
+    {
+      label: 'Avg Order Value',
+      value: analytics ? Math.round(analytics.total_revenue / analytics.total_orders) : 0,
+      max: 200,
+      unit: ' JOD',
+      color: 'bg-blue-500'
     }
   ];
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
+            <p className="text-slate-500 mt-1">Loading your Instagram store data...</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+            <span className="text-slate-600">Loading dashboard...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
+            <p className="text-slate-500 mt-1">Welcome back to your Instagram store.</p>
+          </div>
+        </div>
+        <Alert className="border-red-200 bg-red-50">
+          <AlertCircle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-700">
+            {error}
+          </AlertDescription>
+        </Alert>
+        <div className="text-center">
+          <Button onClick={() => window.location.reload()}>
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -167,91 +243,76 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {orders.slice(0, 4).map((order) => (
-                <div key={order.id} className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">{order.customer}</p>
-                    <p className="text-xs text-slate-500">{order.sku}</p>
+              {analytics?.recent_orders && analytics.recent_orders.length > 0 ? (
+                analytics.recent_orders.slice(0, 4).map((order) => (
+                  <div key={order.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">{order.customer}</p>
+                      <p className="text-xs text-slate-500">{order.sku}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-slate-900">{order.total_amount} JOD</p>
+                      <Badge 
+                        variant={
+                          order.status === 'delivered' ? 'default' :
+                          order.status === 'shipped' ? 'secondary' :
+                          order.status === 'confirmed' ? 'outline' : 'destructive'
+                        }
+                        className="text-xs"
+                      >
+                        {order.status}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-slate-900">{order.total_amount} JOD</p>
-                    <Badge 
-                      variant={
-                        order.status === 'delivered' ? 'default' :
-                        order.status === 'shipped' ? 'secondary' :
-                        order.status === 'confirmed' ? 'outline' : 'destructive'
-                      }
-                      className="text-xs"
-                    >
-                      {order.status}
-                    </Badge>
-                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-sm text-slate-500">No recent orders</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Recent Conversations */}
+        {/* Top Products */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <MessageCircle className="w-5 h-5 text-blue-500" />
-              Recent Conversations
+              <Star className="w-5 h-5 text-yellow-500" />
+              Top Products
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {conversations.slice(0, 3).map((conv) => (
-                <div key={conv.id} className="border-l-4 border-blue-200 pl-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium text-slate-900">{conv.sender}</p>
-                    <Badge variant={conv.ai_generated ? 'secondary' : 'outline'} className="text-xs">
-                      {conv.ai_generated ? 'AI' : 'Customer'}
-                    </Badge>
+              {analytics?.top_products && analytics.top_products.length > 0 ? (
+                analytics.top_products.slice(0, 3).map((product) => (
+                  <div key={product.id} className="border-l-4 border-yellow-200 pl-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-medium text-slate-900">{product.name}</p>
+                      <Badge variant="outline" className="text-xs">
+                        Stock: {product.stock_quantity || 0}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-600">{product.sku}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <p className="text-sm font-bold text-slate-900">{product.price_jod} JOD</p>
+                      {product.category && (
+                        <Badge variant="secondary" className="text-xs">
+                          {product.category}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-600 line-clamp-2">{conv.text}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Clock className="w-3 h-3 text-slate-400" />
-                    <span className="text-xs text-slate-400">
-                      {new Date(conv.ts).toLocaleTimeString('en-US', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
-                    </span>
-                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-sm text-slate-500">No products available</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Top Products */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-purple-500" />
-            Top Performing Products
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {dashboardStats.top_products.map((product) => (
-              <div key={product.id} className="flex items-center gap-4 p-4 border border-slate-200 rounded-lg">
-                <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center">
-                  <span className="text-2xl">👗</span>
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-medium text-slate-900">{product.name}</h4>
-                  <p className="text-sm text-slate-500">{product.sku}</p>
-                  <p className="text-sm font-bold text-green-600 mt-1">{product.price_jod} JOD</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
