@@ -13,19 +13,19 @@ import requests
 import jwt
 from cryptography.fernet import Fernet
 
-from config import settings
-from azure_keyvault import get_secret
+from .config import Settings
 
 logger = logging.getLogger(__name__)
 
 class InstagramOAuth:
     """Instagram OAuth 2.0 implementation"""
     
-    def __init__(self):
-        self.app_id = get_secret('meta-app-id') or settings.meta_app_id
-        self.app_secret = get_secret('meta-app-secret') or settings.meta_app_secret
-        self.graph_api_version = settings.meta_graph_api_version
+    def __init__(self, settings: Settings = Settings()):
+        self.app_id = settings.META_APP_ID
+        self.app_secret = settings.META_APP_SECRET
+        self.graph_api_version = settings.META_GRAPH_API_VERSION
         self.base_url = f"https://graph.facebook.com/{self.graph_api_version}"
+        self.redirect_uri = settings.META_REDIRECT_URI
         
         # Encryption for token storage
         self.encryption_key = self._get_encryption_key()
@@ -45,7 +45,7 @@ class InstagramOAuth:
             key = key.encode() if isinstance(key, str) else key
         return key
     
-    def get_authorization_url(self, redirect_uri: str, business_name: str = "") -> Tuple[str, str]:
+    def get_authorization_url(self, redirect_uri: str = None, business_name: str = "") -> Tuple[str, str]:
         """Generate Instagram authorization URL"""
         
         # Generate state parameter for CSRF protection
@@ -54,7 +54,7 @@ class InstagramOAuth:
         # Store state with metadata
         self._oauth_states[state] = {
             'created_at': datetime.utcnow(),
-            'redirect_uri': redirect_uri,
+            'redirect_uri': redirect_uri or self.redirect_uri,
             'business_name': business_name
         }
         
@@ -62,20 +62,24 @@ class InstagramOAuth:
         scopes = [
             'instagram_basic',
             'instagram_manage_messages',
+            'instagram_content_publish',
+            'instagram_manage_insights',
             'pages_messaging',
-            'pages_show_list'
+            'pages_show_list',
+            'pages_manage_metadata',
+            'pages_read_engagement'
         ]
         
         # Build authorization URL
         auth_params = {
             'client_id': self.app_id,
-            'redirect_uri': redirect_uri,
+            'redirect_uri': redirect_uri or self.redirect_uri,
             'scope': ','.join(scopes),
             'response_type': 'code',
             'state': state
         }
         
-        auth_url = "https://www.facebook.com/v18.0/dialog/oauth?" + "&".join([
+        auth_url = f"https://www.facebook.com/{self.graph_api_version}/dialog/oauth?" + "&".join([
             f"{key}={requests.utils.quote(str(value))}" 
             for key, value in auth_params.items()
         ])
@@ -83,7 +87,7 @@ class InstagramOAuth:
         logger.info(f"Generated Instagram OAuth URL for business: {business_name}")
         return auth_url, state
     
-    def exchange_code_for_token(self, code: str, state: str, redirect_uri: str) -> Optional[Dict]:
+    def exchange_code_for_token(self, code: str, state: str) -> Optional[Dict]:
         """Exchange authorization code for access token"""
         
         # Verify state parameter
@@ -105,7 +109,7 @@ class InstagramOAuth:
             token_data = {
                 'client_id': self.app_id,
                 'client_secret': self.app_secret,
-                'redirect_uri': redirect_uri,
+                'redirect_uri': state_data['redirect_uri'],
                 'code': code
             }
             
@@ -201,20 +205,20 @@ class InstagramOAuth:
                     }
                     
                     ig_response = requests.get(ig_url, params=ig_params)
-                    if ig_response.status_code == 200:
-                        ig_data = ig_response.json()
-                        
-                        instagram_accounts.append({
-                            'id': ig_data['id'],
-                            'username': ig_data.get('username'),
-                            'name': ig_data.get('name'),
-                            'profile_picture_url': ig_data.get('profile_picture_url'),
-                            'followers_count': ig_data.get('followers_count'),
-                            'media_count': ig_data.get('media_count'),
-                            'page_id': page['id'],
-                            'page_name': page['name'],
-                            'page_access_token': page['access_token']
-                        })
+                    ig_response.raise_for_status()
+                    
+                    ig_data = ig_response.json()
+                    instagram_accounts.append({
+                        'id': ig_data['id'],
+                        'username': ig_data['username'],
+                        'name': ig_data.get('name', ''),
+                        'profile_picture_url': ig_data.get('profile_picture_url', ''),
+                        'followers_count': ig_data.get('followers_count', 0),
+                        'media_count': ig_data.get('media_count', 0),
+                        'page_id': page['id'],
+                        'page_name': page['name'],
+                        'page_access_token': page['access_token']
+                    })
             
             return instagram_accounts
             
@@ -304,13 +308,13 @@ class InstagramOAuth:
 # Global Instagram OAuth instance
 instagram_oauth = InstagramOAuth()
 
-def get_instagram_auth_url(redirect_uri: str, business_name: str = "") -> Tuple[str, str]:
+def get_instagram_auth_url(redirect_uri: str = None, business_name: str = "") -> Tuple[str, str]:
     """Get Instagram authorization URL"""
     return instagram_oauth.get_authorization_url(redirect_uri, business_name)
 
-def handle_oauth_callback(code: str, state: str, redirect_uri: str) -> Optional[Dict]:
+def handle_oauth_callback(code: str, state: str) -> Optional[Dict]:
     """Handle OAuth callback and return authentication data"""
-    return instagram_oauth.exchange_code_for_token(code, state, redirect_uri)
+    return instagram_oauth.exchange_code_for_token(code, state)
 
 def validate_instagram_token(access_token: str) -> bool:
     """Validate Instagram access token"""

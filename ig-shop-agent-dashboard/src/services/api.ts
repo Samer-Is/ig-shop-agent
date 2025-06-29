@@ -168,6 +168,9 @@ export class ApiService {
   async getInstagramAuthUrl(): Promise<ApiResponse<{ auth_url: string }>> {
     try {
       const response = await this.api.get('/auth/instagram/login');
+      if (!response.data?.auth_url) {
+        throw new Error('Invalid response: missing auth_url');
+      }
       return { data: response.data };
     } catch (error: any) {
       console.error('Failed to get Instagram auth URL:', error.response?.data || error);
@@ -178,6 +181,9 @@ export class ApiService {
   async handleInstagramCallback(code: string, state: string): Promise<ApiResponse> {
     try {
       const response = await this.api.post('/auth/instagram/callback', { code, state });
+      if (!response.data?.success) {
+        throw new Error('Instagram authentication failed');
+      }
       return { data: response.data };
     } catch (error: any) {
       console.error('Instagram callback error:', error.response?.data || error);

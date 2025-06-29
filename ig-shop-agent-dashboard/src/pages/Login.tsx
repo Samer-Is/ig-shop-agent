@@ -33,38 +33,34 @@ export function Login() {
     const code = searchParams.get('code');
     const error = searchParams.get('error');
     const error_description = searchParams.get('error_description');
+    const state = searchParams.get('state');
 
     if (error) {
       setError(`Instagram OAuth error: ${error_description || error}`);
       return;
     }
 
-    if (code) {
-      handleInstagramCallback(code);
+    if (code && state) {
+      handleInstagramCallback(code, state);
     }
   }, [searchParams, isAuthenticated, navigate]);
 
-  const handleInstagramCallback = async (code: string) => {
+  const handleInstagramCallback = async (code: string, state: string) => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const response = await apiService.handleInstagramCallback(code, '');
+      const response = await apiService.handleInstagramCallback(code, state);
       
-      if (response.data?.token) {
+      if (response.data?.token && response.data?.user) {
         // Successfully connected Instagram and got auth token
-        const userData = {
-          id: response.data.user.id,
-          instagram_handle: response.data.user.instagram_handle,
-          instagram_connected: true
-        };
-        
-        login(response.data.token, userData);
+        login(response.data.token, response.data.user);
         navigate('/dashboard');
       } else {
         setError(response.error || 'Failed to connect Instagram');
       }
     } catch (err) {
+      console.error('Instagram callback error:', err);
       setError('Network error while connecting Instagram');
     } finally {
       setIsLoading(false);
@@ -79,12 +75,16 @@ export function Login() {
       const response = await apiService.getInstagramAuthUrl();
       
       if (response.data?.auth_url) {
+        // Store current URL for redirect back after auth
+        sessionStorage.setItem('auth_redirect', window.location.href);
+        
         // Redirect to Instagram OAuth
         window.location.href = response.data.auth_url;
       } else {
         setError(response.error || 'Failed to get Instagram login URL');
       }
     } catch (err) {
+      console.error('Instagram login error:', err);
       setError('Network error while starting Instagram login');
     } finally {
       setIsLoading(false);
