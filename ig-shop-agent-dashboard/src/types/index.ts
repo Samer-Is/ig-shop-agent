@@ -9,12 +9,14 @@ export interface Tenant {
 }
 
 export interface User {
-  id: string;
-  tenant_id: string;
+  id: number | string;  // Support both for backend compatibility
+  tenant_id?: string;
   email: string;
-  role: 'admin' | 'manager' | 'agent';
-  last_login: string;
-  created_at: string;
+  business_name?: string;
+  role?: 'admin' | 'manager' | 'agent';
+  last_login?: string;
+  created_at?: string;
+  instagram_connected?: boolean;
 }
 
 export interface MetaToken {

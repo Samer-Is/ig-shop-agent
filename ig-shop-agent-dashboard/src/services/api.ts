@@ -7,7 +7,7 @@
 const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
 
 // Import types from main types file
-import type { KBDocument, Conversation } from '../types';
+import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
 
 // API Response types matching Flask backend
 interface ApiResponse<T> {
@@ -103,14 +103,14 @@ interface Analytics {
   recent_orders: Order[];
 }
 
-interface Conversation {
+interface ConversationApi {
   id: number;
   text: string;
   ai_generated: boolean;
   created_at: string;
 }
 
-interface KBDocument {
+interface KBDocumentApi {
   id: number;
   title: string;
   file_uri: string;
@@ -279,13 +279,13 @@ class ApiService {
   }
 
   // Knowledge Base - Placeholder (not implemented in backend yet)
-  async getKnowledgeBase(): Promise<KBDocument[]> {
+  async getKnowledgeBase(): Promise<KBDocumentApi[]> {
     // Backend doesn't have this endpoint yet, return empty
     return [];
   }
 
   // Conversations - Placeholder (not implemented in backend yet)
-  async getConversations(): Promise<Conversation[]> {
+  async getConversations(): Promise<ConversationApi[]> {
     // Backend doesn't have this endpoint yet, return empty
     return [];
   }
@@ -328,6 +328,7 @@ export type {
   CreateCatalogItemRequest,
   Order,
   Analytics,
+  Analytics as DashboardAnalytics,
   AITestResponse,
 };
 

@@ -1,12 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiService } from '../services/api';
+import type { User } from '../types';
 
-interface User {
-  id: string;
-  username: string;
-  name: string;
-  tenant_id: string;
-}
+// Remove local User interface to use the one from types/index.ts
 
 interface AuthContextType {
   user: User | null;
