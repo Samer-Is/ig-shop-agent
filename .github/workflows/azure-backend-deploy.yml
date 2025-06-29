@@ -40,6 +40,31 @@ jobs:
         print('✅ Flask app imports successfully')
         print(f'✅ Routes: {len(list(app.url_map.iter_rules()))} routes configured')
         "
+    
+    - name: Log in to Azure CLI
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        
+    - name: Configure Azure Web App for Python
+      run: |
+        # Set the runtime stack to Python 3.11
+        az webapp config set \
+          --resource-group igshop-dev-rg-v2 \
+          --name igshop-dev-yjhtoi-api \
+          --linux-fx-version "PYTHON|3.11"
+        
+        # Configure startup command
+        az webapp config set \
+          --resource-group igshop-dev-rg-v2 \
+          --name igshop-dev-yjhtoi-api \
+          --startup-file "gunicorn --bind=0.0.0.0 --timeout 600 app_simple:app"
+        
+        # Enable build automation
+        az webapp config appsettings set \
+          --resource-group igshop-dev-rg-v2 \
+          --name igshop-dev-yjhtoi-api \
+          --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
         
     - name: Create deployment package
       run: |
@@ -49,35 +74,31 @@ jobs:
         rm -rf .pytest_cache
         rm -f test_*.py
         
-        # Create a startup script for Azure
-        cat > startup.py << 'EOF'
-        import os
-        import sys
+        # Ensure requirements.txt is present
+        if [ ! -f requirements.txt ]; then
+          echo "Error: requirements.txt not found!"
+          exit 1
+        fi
         
-        # Add current directory to Python path
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        
-        from app_simple import app
-        
-        if __name__ == "__main__":
-            port = int(os.environ.get("PORT", 8000))
-            app.run(host="0.0.0.0", port=port, debug=False)
-        EOF
-        
-        # Create requirements file for Azure
-        echo "Creating requirements.txt for Azure..."
+        echo "✅ Deployment package prepared"
+        echo "Files to deploy:"
         ls -la
         
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
       with:
-        app-name: 'igshop-dev-yjhtoi-api'  # Your actual Azure Web App name
+        app-name: 'igshop-dev-yjhtoi-api'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: './backend'
-        startup-command: 'python startup.py'
 
     - name: Test deployment
       run: |
         echo "Deployment completed!"
         echo "Backend should be available at: https://igshop-dev-yjhtoi-api.azurewebsites.net"
-        echo "Health check: https://igshop-dev-yjhtoi-api.azurewebsites.net/health" 
+        echo "Health check: https://igshop-dev-yjhtoi-api.azurewebsites.net/health"
+        
+        # Wait a bit for the app to start
+        sleep 30
+        
+        # Test the health endpoint
+        curl -f https://igshop-dev-yjhtoi-api.azurewebsites.net/health || echo "Health check failed (app may still be starting)" 

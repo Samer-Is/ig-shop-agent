@@ -5,10 +5,10 @@ Azure Web App compatible backend - Production Ready
 import os
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, redirect, url_for, send_from_directory
 from flask_cors import CORS
 import asyncio
 import asyncpg
@@ -21,6 +21,10 @@ import openai
 import csv
 import io
 from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 
 # Import our modules
 from config import settings
@@ -47,579 +51,526 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Enable CORS for frontend
 CORS(app, 
-     origins=["http://localhost:3000", "https://*.azurewebsites.net"],
-     supports_credentials=True)
+     origins=[
+         "http://localhost:3000", 
+         "http://localhost:5173",
+         "https://red-island-0b863450f.2.azurestaticapps.net",
+         "https://*.azurestaticapps.net"
+     ],
+     supports_credentials=True,
+     allow_headers=['Content-Type', 'Authorization'],
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 
-# =============================================================================
-# HEALTH CHECK ENDPOINTS
-# =============================================================================
+# Azure-compatible configuration
+app.config['SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
+# Database configuration for Azure
+if os.environ.get('AZURE_POSTGRESQL_CONNECTIONSTRING'):
+    # Parse Azure connection string
+    conn_str = os.environ.get('AZURE_POSTGRESQL_CONNECTIONSTRING')
+    app.config['SQLALCHEMY_DATABASE_URI'] = conn_str
+elif all([
+    os.environ.get('AZURE_POSTGRESQL_HOST'),
+    os.environ.get('AZURE_POSTGRESQL_USER'), 
+    os.environ.get('AZURE_POSTGRESQL_PASSWORD'),
+    os.environ.get('AZURE_POSTGRESQL_NAME')
+]):
+    # Use individual environment variables
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{os.environ.get('AZURE_POSTGRESQL_USER')}:{os.environ.get('AZURE_POSTGRESQL_PASSWORD')}@{os.environ.get('AZURE_POSTGRESQL_HOST')}/{os.environ.get('AZURE_POSTGRESQL_NAME')}"
+else:
+    # Local development fallback
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///local_dev.db'
+
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Instagram/Meta configuration
+app.config['META_APP_ID'] = os.environ.get('META_APP_ID', '1879578119651644')
+app.config['META_APP_SECRET'] = os.environ.get('META_APP_SECRET', 'f79b3350f43751d6139e1b29a232cbf3')
+app.config['META_REDIRECT_URI'] = os.environ.get('META_REDIRECT_URI', 'https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/callback')
+
+# OpenAI configuration
+openai.api_key = os.environ.get('OPENAI_API_KEY', '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')
+
+# File upload configuration
+app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Initialize extensions
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+
+# Database Models
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255))
+    business_name = db.Column(db.String(200))
+    instagram_user_id = db.Column(db.String(100))
+    instagram_access_token = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+class Product(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    price = db.Column(db.Float, nullable=False)
+    currency = db.Column(db.String(3), default='JOD')
+    image_url = db.Column(db.String(500))
+    category = db.Column(db.String(100))
+    availability = db.Column(db.String(20), default='available')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Order(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    customer_instagram_id = db.Column(db.String(100))
+    customer_name = db.Column(db.String(200))
+    total_amount = db.Column(db.Float, nullable=False)
+    currency = db.Column(db.String(3), default='JOD')
+    status = db.Column(db.String(50), default='pending')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Conversation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    instagram_user_id = db.Column(db.String(100), nullable=False)
+    last_message = db.Column(db.Text)
+    last_message_time = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(50), default='active')
+
+# JWT Token handling
+def generate_token(user_id):
+    payload = {
+        'user_id': user_id,
+        'exp': datetime.utcnow() + timedelta(days=30)
+    }
+    return jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
+
+def verify_token(token):
+    try:
+        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        return payload['user_id']
+    except:
+        return None
+
+def require_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        if token and token.startswith('Bearer '):
+            token = token[7:]
+            user_id = verify_token(token)
+            if user_id:
+                request.current_user_id = user_id
+                return f(*args, **kwargs)
+        return jsonify({'error': 'Authentication required'}), 401
+    return decorated_function
+
+# Routes
+@app.route('/')
+def home():
     return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
-        'service': 'ig-shop-agent-backend'
-    })
-
-@app.route('/api/health', methods=['GET'])
-def api_health_check():
-    """API health check with more details"""
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
-        'service': 'ig-shop-agent-backend',
+        'message': 'IG Shop Agent API',
         'version': '1.0.0',
-        'environment': settings.environment,
-        'features': {
-            'instagram_oauth': bool(settings.meta_app_id),
-            'openai_integration': bool(settings.openai_api_key),
-            'database_connected': True
+        'status': 'running',
+        'endpoints': {
+            'auth': '/auth/*',
+            'api': '/api/*',
+            'health': '/health'
         }
     })
 
-# =============================================================================
-# AUTHENTICATION ENDPOINTS
-# =============================================================================
+@app.route('/health')
+def health_check():
+    try:
+        # Test database connection
+        db.session.execute('SELECT 1')
+        db_status = 'connected'
+    except Exception as e:
+        db_status = f'error: {str(e)}'
+    
+    return jsonify({
+        'status': 'healthy',
+        'database': db_status,
+        'timestamp': datetime.utcnow().isoformat()
+    })
+
+# Authentication Routes
+@app.route('/auth/register', methods=['POST'])
+def register():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        business_name = data.get('business_name', '')
+        
+        if not email or not password:
+            return jsonify({'error': 'Email and password required'}), 400
+        
+        if User.query.filter_by(email=email).first():
+            return jsonify({'error': 'User already exists'}), 400
+        
+        user = User(email=email, business_name=business_name)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        
+        token = generate_token(user.id)
+        
+        return jsonify({
+            'message': 'User created successfully',
+            'token': token,
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'business_name': user.business_name
+            }
+        })
+    except Exception as e:
+        logger.error(f"Registration error: {str(e)}")
+        return jsonify({'error': 'Registration failed'}), 500
+
+@app.route('/auth/login', methods=['POST'])
+def login():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        
+        if not email or not password:
+            return jsonify({'error': 'Email and password required'}), 400
+        
+        user = User.query.filter_by(email=email).first()
+        if not user or not user.check_password(password):
+            return jsonify({'error': 'Invalid credentials'}), 401
+        
+        token = generate_token(user.id)
+        
+        return jsonify({
+            'message': 'Login successful',
+            'token': token,
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'business_name': user.business_name,
+                'has_instagram': bool(user.instagram_access_token)
+            }
+        })
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        return jsonify({'error': 'Login failed'}), 500
 
 @app.route('/auth/instagram', methods=['GET'])
+@require_auth
 def instagram_auth():
-    """Start Instagram OAuth flow"""
     try:
-        business_name = request.args.get('business_name', '')
-        redirect_uri = request.args.get('redirect_uri', 'http://localhost:3000/auth/callback')
+        user_id = request.current_user_id
         
-        auth_url, state = get_instagram_auth_url(redirect_uri, business_name)
-        
-        # Store state in session
-        session['oauth_state'] = state
-        session['business_name'] = business_name
+        # Instagram OAuth URL
+        auth_url = f"https://api.instagram.com/oauth/authorize?client_id={app.config['META_APP_ID']}&redirect_uri={app.config['META_REDIRECT_URI']}&scope=user_profile,user_media&response_type=code&state={user_id}"
         
         return jsonify({
             'auth_url': auth_url,
-            'state': state
+            'message': 'Redirect to Instagram authorization'
         })
-        
     except Exception as e:
-        logger.error(f"Instagram auth error: {e}")
-        return jsonify({'error': 'Failed to generate Instagram auth URL'}), 500
+        logger.error(f"Instagram auth error: {str(e)}")
+        return jsonify({'error': 'Instagram auth failed'}), 500
 
-@app.route('/auth/callback', methods=['GET'])
+@app.route('/auth/instagram/callback', methods=['GET'])
 def instagram_callback():
-    """Handle Instagram OAuth callback"""
     try:
         code = request.args.get('code')
-        state = request.args.get('state')
+        state = request.args.get('state')  # user_id
         error = request.args.get('error')
         
         if error:
-            return jsonify({'error': f'Instagram OAuth error: {error}'}), 400
+            return jsonify({'error': f'Instagram auth error: {error}'}), 400
         
         if not code or not state:
             return jsonify({'error': 'Missing authorization code or state'}), 400
         
-        # Verify state
-        if state != session.get('oauth_state'):
-            return jsonify({'error': 'Invalid state parameter'}), 400
-        
-        # Get redirect URI from session or use default
-        redirect_uri = request.args.get('redirect_uri', 'http://localhost:3000/auth/callback')
-        
-        # Exchange code for token
-        auth_data = handle_oauth_callback(code, state, redirect_uri)
-        
-        if not auth_data:
-            return jsonify({'error': 'Failed to authenticate with Instagram'}), 400
-        
-        # Create or get tenant from database
-        instagram_accounts = auth_data['instagram_accounts']
-        if not instagram_accounts:
-            return jsonify({'error': 'No Instagram business accounts found'}), 400
-        
-        # Use first Instagram account
-        ig_account = instagram_accounts[0]
-        tenant_id = f"tenant_{ig_account['id']}"
-        
-        # Generate session token
-        user_data = {
-            'id': ig_account['id'],
-            'username': ig_account['username'],
-            'name': ig_account['name']
+        # Exchange code for access token
+        token_url = "https://api.instagram.com/oauth/access_token"
+        token_data = {
+            'client_id': app.config['META_APP_ID'],
+            'client_secret': app.config['META_APP_SECRET'],
+            'grant_type': 'authorization_code',
+            'redirect_uri': app.config['META_REDIRECT_URI'],
+            'code': code
         }
         
-        session_token = generate_session_token(user_data, tenant_id)
+        token_response = requests.post(token_url, data=token_data)
+        token_result = token_response.json()
         
-        # Clean up session
-        session.pop('oauth_state', None)
-        session.pop('business_name', None)
+        if 'access_token' not in token_result:
+            return jsonify({'error': 'Failed to get access token'}), 400
         
-        return jsonify({
-            'success': True,
-            'session_token': session_token,
-            'tenant_id': tenant_id,
-            'user': user_data,
-            'instagram_accounts': instagram_accounts
-        })
+        # Update user with Instagram info
+        user = User.query.get(state)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         
-    except Exception as e:
-        logger.error(f"Instagram callback error: {e}")
-        return jsonify({'error': 'Authentication failed'}), 500
-
-@app.route('/auth/verify', methods=['POST'])
-def verify_token():
-    """Verify session token"""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Missing or invalid authorization header'}), 401
+        user.instagram_access_token = token_result['access_token']
+        user.instagram_user_id = token_result.get('user_id')
+        db.session.commit()
         
-        token = auth_header[7:]  # Remove 'Bearer ' prefix
-        payload = verify_session_token(token)
-        
-        if not payload:
-            return jsonify({'error': 'Invalid or expired token'}), 401
-        
-        return jsonify({
-            'valid': True,
-            'user_id': payload.get('user_id'),
-            'username': payload.get('username'),
-            'tenant_id': payload.get('tenant_id')
-        })
+        # Redirect to frontend success page
+        frontend_url = "https://red-island-0b863450f.2.azurestaticapps.net"
+        return redirect(f"{frontend_url}/?instagram_connected=true")
         
     except Exception as e:
-        logger.error(f"Token verification error: {e}")
-        return jsonify({'error': 'Token verification failed'}), 500
+        logger.error(f"Instagram callback error: {str(e)}")
+        return jsonify({'error': 'Instagram callback failed'}), 500
 
-# =============================================================================
-# CATALOG MANAGEMENT ENDPOINTS - LIVE DATABASE INTEGRATION
-# =============================================================================
-
-def async_route(f):
-    """Decorator to handle async functions in Flask"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        return asyncio.run(f(*args, **kwargs))
-    return decorated_function
-
-def get_tenant_id_from_token(auth_header: str) -> Optional[str]:
-    """Extract tenant_id from JWT token"""
+# API Routes
+@app.route('/api/user/profile', methods=['GET'])
+@require_auth
+def get_profile():
     try:
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return None
-        
-        token = auth_header[7:]  # Remove 'Bearer ' prefix
-        payload = verify_session_token(token)
-        return payload.get('tenant_id') if payload else None
-    except Exception:
-        return None
-
-@app.route('/api/catalog', methods=['GET'])
-@async_route
-async def get_catalog():
-    """Get catalog items for current tenant"""
-    try:
-        # Check authentication and get tenant_id
-        auth_header = request.headers.get('Authorization')
-        tenant_id = get_tenant_id_from_token(auth_header)
-        
-        if not tenant_id:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        # Initialize database connection if needed
-        if not db_service.is_connected:
-            await db_service.connect()
-        
-        # Get pagination parameters
-        limit = int(request.args.get('limit', 50))
-        offset = int(request.args.get('offset', 0))
-        category = request.args.get('category')
-        search = request.args.get('search')
-        
-        # Build query
-        where_conditions = ["tenant_id = $1"]
-        params = [tenant_id]
-        param_count = 1
-        
-        if category:
-            param_count += 1
-            where_conditions.append(f"category = ${param_count}")
-            params.append(category)
-        
-        if search:
-            param_count += 1
-            where_conditions.append(f"(name ILIKE ${param_count} OR description ILIKE ${param_count})")
-            params.append(f"%{search}%")
-        
-        where_clause = " AND ".join(where_conditions)
-        
-        # Get total count
-        count_query = f"SELECT COUNT(*) FROM catalog_items WHERE {where_clause}"
-        total = await db_service.fetch_val(count_query, *params)
-        
-        # Get items
-        items_query = f"""
-            SELECT id, tenant_id, sku, name, price_jod, media_url, extras, 
-                   description, category, stock_quantity, created_at, updated_at
-            FROM catalog_items 
-            WHERE {where_clause}
-            ORDER BY created_at DESC
-            LIMIT ${param_count + 1} OFFSET ${param_count + 2}
-        """
-        params.extend([limit, offset])
-        
-        items = await db_service.fetch_all(items_query, *params)
+        user = User.query.get(request.current_user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         
         return jsonify({
-            'items': items,
-            'total': total or 0,
-            'limit': limit,
-            'offset': offset
+            'id': user.id,
+            'email': user.email,
+            'business_name': user.business_name,
+            'has_instagram': bool(user.instagram_access_token),
+            'created_at': user.created_at.isoformat()
         })
-        
     except Exception as e:
-        logger.error(f"Get catalog error: {e}")
-        return jsonify({'error': 'Failed to fetch catalog'}), 500
+        logger.error(f"Profile error: {str(e)}")
+        return jsonify({'error': 'Failed to get profile'}), 500
 
-@app.route('/api/catalog', methods=['POST'])
-@async_route
-async def create_catalog_item():
-    """Create new catalog item"""
+@app.route('/api/user/profile', methods=['PUT'])
+@require_auth
+def update_profile():
     try:
-        # Check authentication and get tenant_id
-        auth_header = request.headers.get('Authorization')
-        tenant_id = get_tenant_id_from_token(auth_header)
-        
-        if not tenant_id:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        # Initialize database connection if needed
-        if not db_service.is_connected:
-            await db_service.connect()
-        
         data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Invalid JSON data'}), 400
+        user = User.query.get(request.current_user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         
-        # Validate required fields
-        required_fields = ['sku', 'name', 'price_jod']
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({'error': f'Missing required field: {field}'}), 400
+        if 'business_name' in data:
+            user.business_name = data['business_name']
         
-        # Generate item ID
-        item_id = str(uuid.uuid4())
+        db.session.commit()
         
-        # Insert into database
-        insert_query = """
-            INSERT INTO catalog_items (
-                id, tenant_id, sku, name, price_jod, description, category, 
-                stock_quantity, media_url, extras
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        """
+        return jsonify({
+            'message': 'Profile updated successfully',
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'business_name': user.business_name
+            }
+        })
+    except Exception as e:
+        logger.error(f"Update profile error: {str(e)}")
+        return jsonify({'error': 'Failed to update profile'}), 500
+
+# Product Management
+@app.route('/api/products', methods=['GET'])
+@require_auth
+def get_products():
+    try:
+        products = Product.query.filter_by(user_id=request.current_user_id).all()
+        return jsonify({
+            'products': [{
+                'id': p.id,
+                'name': p.name,
+                'description': p.description,
+                'price': p.price,
+                'currency': p.currency,
+                'image_url': p.image_url,
+                'category': p.category,
+                'availability': p.availability,
+                'created_at': p.created_at.isoformat()
+            } for p in products]
+        })
+    except Exception as e:
+        logger.error(f"Get products error: {str(e)}")
+        return jsonify({'error': 'Failed to get products'}), 500
+
+@app.route('/api/products', methods=['POST'])
+@require_auth
+def create_product():
+    try:
+        data = request.get_json()
         
-        await db_service.execute_query(
-            insert_query,
-            item_id,
-            tenant_id,
-            data['sku'],
-            data['name'],
-            data['price_jod'],
-            data.get('description', ''),
-            data.get('category', ''),
-            data.get('stock_quantity', 0),
-            data.get('media_url', ''),
-            data.get('extras', {})
+        product = Product(
+            user_id=request.current_user_id,
+            name=data['name'],
+            description=data.get('description', ''),
+            price=float(data['price']),
+            currency=data.get('currency', 'JOD'),
+            image_url=data.get('image_url', ''),
+            category=data.get('category', ''),
+            availability=data.get('availability', 'available')
         )
         
-        return jsonify({
-            'success': True,
-            'item_id': item_id,
-            'message': 'Catalog item created successfully'
-        }), 201
+        db.session.add(product)
+        db.session.commit()
         
+        return jsonify({
+            'message': 'Product created successfully',
+            'product': {
+                'id': product.id,
+                'name': product.name,
+                'price': product.price,
+                'currency': product.currency
+            }
+        })
     except Exception as e:
-        logger.error(f"Create catalog item error: {e}")
-        return jsonify({'error': 'Failed to create catalog item'}), 500
+        logger.error(f"Create product error: {str(e)}")
+        return jsonify({'error': 'Failed to create product'}), 500
 
-# =============================================================================
-# ORDER MANAGEMENT ENDPOINTS - LIVE DATABASE INTEGRATION
-# =============================================================================
-
+# Order Management
 @app.route('/api/orders', methods=['GET'])
-@async_route
-async def get_orders():
-    """Get orders for current tenant"""
+@require_auth
+def get_orders():
     try:
-        # Check authentication and get tenant_id
-        auth_header = request.headers.get('Authorization')
-        tenant_id = get_tenant_id_from_token(auth_header)
-        
-        if not tenant_id:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        # Initialize database connection if needed
-        if not db_service.is_connected:
-            await db_service.connect()
-        
-        # Get pagination parameters
-        limit = int(request.args.get('limit', 50))
-        offset = int(request.args.get('offset', 0))
-        status = request.args.get('status')
-        
-        # Build query
-        where_conditions = ["tenant_id = $1"]
-        params = [tenant_id]
-        
-        if status:
-            where_conditions.append("status = $2")
-            params.append(status)
-        
-        where_clause = " AND ".join(where_conditions)
-        
-        # Get total count
-        count_query = f"SELECT COUNT(*) FROM orders WHERE {where_clause}"
-        total = await db_service.fetch_val(count_query, *params)
-        
-        # Get orders
-        param_offset = len(params)
-        orders_query = f"""
-            SELECT id, tenant_id, sku, qty, customer, phone, status, 
-                   total_amount, delivery_address, notes, created_at, updated_at
-            FROM orders 
-            WHERE {where_clause}
-            ORDER BY created_at DESC
-            LIMIT ${param_offset + 1} OFFSET ${param_offset + 2}
-        """
-        params.extend([limit, offset])
-        
-        orders = await db_service.fetch_all(orders_query, *params)
-        
+        orders = Order.query.filter_by(user_id=request.current_user_id).all()
         return jsonify({
-            'orders': orders,
-            'total': total or 0,
-            'limit': limit,
-            'offset': offset
+            'orders': [{
+                'id': o.id,
+                'customer_name': o.customer_name,
+                'total_amount': o.total_amount,
+                'currency': o.currency,
+                'status': o.status,
+                'created_at': o.created_at.isoformat()
+            } for o in orders]
         })
-        
     except Exception as e:
-        logger.error(f"Get orders error: {e}")
-        return jsonify({'error': 'Failed to fetch orders'}), 500
+        logger.error(f"Get orders error: {str(e)}")
+        return jsonify({'error': 'Failed to get orders'}), 500
 
-@app.route('/api/orders', methods=['POST'])
-@async_route
-async def create_order():
-    """Create new order"""
+# AI Chat Integration
+@app.route('/api/ai/chat', methods=['POST'])
+@require_auth
+def ai_chat():
     try:
-        # Check authentication and get tenant_id
-        auth_header = request.headers.get('Authorization')
-        tenant_id = get_tenant_id_from_token(auth_header)
-        
-        if not tenant_id:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        # Initialize database connection if needed
-        if not db_service.is_connected:
-            await db_service.connect()
-        
         data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Invalid JSON data'}), 400
+        message = data.get('message', '')
         
-        # Validate required fields
-        required_fields = ['sku', 'qty', 'customer', 'phone', 'total_amount']
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({'error': f'Missing required field: {field}'}), 400
+        if not message:
+            return jsonify({'error': 'Message is required'}), 400
         
-        # Generate order ID
-        order_id = str(uuid.uuid4())
+        # Get user's products for context
+        products = Product.query.filter_by(user_id=request.current_user_id).all()
+        user = User.query.get(request.current_user_id)
         
-        # Insert into database
-        insert_query = """
-            INSERT INTO orders (
-                id, tenant_id, sku, qty, customer, phone, status, 
-                total_amount, delivery_address, notes
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        # Create context for AI
+        context = f"""
+        أنت مساعد ذكي لمتجر {user.business_name or 'المتجر'} في الأردن.
+        المنتجات المتوفرة:
         """
         
-        await db_service.execute_query(
-            insert_query,
-            order_id,
-            tenant_id,
-            data['sku'],
-            data['qty'],
-            data['customer'],
-            data['phone'],
-            'pending',  # Default status
-            data['total_amount'],
-            data.get('delivery_address', ''),
-            data.get('notes', '')
+        for product in products[:10]:  # Limit context
+            context += f"- {product.name}: {product.price} {product.currency}\n"
+        
+        context += """
+        يرجى الرد باللغة العربية الأردنية المحلية والتفاعل مع العملاء بطريقة ودودة ومهنية.
+        ساعد العملاء في العثور على المنتجات وقدم المعلومات حول الأسعار والتوفر.
+        """
+        
+        # Call OpenAI API
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": context},
+                {"role": "user", "content": message}
+            ],
+            max_tokens=500,
+            temperature=0.7
         )
+        
+        ai_response = response.choices[0].message.content
         
         return jsonify({
-            'success': True,
-            'order_id': order_id,
-            'message': 'Order created successfully'
-        }), 201
-        
-    except Exception as e:
-        logger.error(f"Create order error: {e}")
-        return jsonify({'error': 'Failed to create order'}), 500
-
-# =============================================================================
-# AI AGENT ENDPOINTS
-# =============================================================================
-
-@app.route('/api/analytics/dashboard', methods=['GET'])
-@async_route
-async def get_dashboard_analytics():
-    """Get dashboard analytics for current tenant"""
-    try:
-        # Check authentication and get tenant_id
-        auth_header = request.headers.get('Authorization')
-        tenant_id = get_tenant_id_from_token(auth_header)
-        
-        if not tenant_id:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        # Initialize database connection if needed
-        if not db_service.is_connected:
-            await db_service.connect()
-        
-        # Get analytics data from database
-        # Total orders
-        total_orders = await db_service.fetch_val(
-            "SELECT COUNT(*) FROM orders WHERE tenant_id = $1", tenant_id
-        ) or 0
-        
-        # Total revenue
-        total_revenue = await db_service.fetch_val(
-            "SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE tenant_id = $1 AND status IN ('confirmed', 'delivered')", 
-            tenant_id
-        ) or 0
-        
-        # Total products
-        total_products = await db_service.fetch_val(
-            "SELECT COUNT(*) FROM catalog_items WHERE tenant_id = $1", tenant_id
-        ) or 0
-        
-        # Pending orders
-        pending_orders = await db_service.fetch_val(
-            "SELECT COUNT(*) FROM orders WHERE tenant_id = $1 AND status = 'pending'", tenant_id
-        ) or 0
-        
-        # Confirmed orders
-        confirmed_orders = await db_service.fetch_val(
-            "SELECT COUNT(*) FROM orders WHERE tenant_id = $1 AND status = 'confirmed'", tenant_id
-        ) or 0
-        
-        # Recent orders (last 5)
-        recent_orders = await db_service.fetch_all(
-            """SELECT id, sku, qty, customer, phone, status, total_amount, created_at 
-               FROM orders WHERE tenant_id = $1 
-               ORDER BY created_at DESC LIMIT 5""", 
-            tenant_id
-        )
-        
-        # Top products (first 3 by creation date)
-        top_products = await db_service.fetch_all(
-            """SELECT id, sku, name, price_jod, category, stock_quantity 
-               FROM catalog_items WHERE tenant_id = $1 
-               ORDER BY created_at DESC LIMIT 3""", 
-            tenant_id
-        )
-        
-        return jsonify({
-            'total_orders': total_orders,
-            'total_revenue': float(total_revenue),
-            'total_products': total_products,
-            'pending_orders': pending_orders,
-            'confirmed_orders': confirmed_orders,
-            'recent_orders': recent_orders,
-            'top_products': top_products
-        })
-        
-    except Exception as e:
-        logger.error(f"Get analytics error: {e}")
-        return jsonify({'error': 'Failed to fetch analytics'}), 500
-
-async def generate_ai_response(message: str, tenant_id: str) -> str:
-    """Generate AI response using real catalog data"""
-    try:
-        # Initialize database connection if needed
-        if not db_service.is_connected:
-            await db_service.connect()
-        
-        # Get real catalog items for this tenant
-        catalog_items = await db_service.fetch_all(
-            """SELECT sku, name, price_jod, description, category, stock_quantity 
-               FROM catalog_items WHERE tenant_id = $1 AND stock_quantity > 0
-               ORDER BY created_at DESC LIMIT 10""",
-            tenant_id
-        )
-        
-        if not catalog_items:
-            return "أعتذر، لا توجد منتجات متاحة حالياً. يرجى المحاولة لاحقاً."
-        
-        # Simple AI response generation based on message content
-        message_lower = message.lower()
-        
-        if any(word in message_lower for word in ['أريد', 'أحتاج', 'أبحث', 'want', 'need', 'looking for']):
-            if catalog_items:
-                first_item = catalog_items[0]
-                return f"أهلاً وسهلاً! يمكنني أن أساعدك. لدينا {first_item['name']} متوفر بسعر {first_item['price_jod']} دينار أردني. هل تود معرفة المزيد عن هذا المنتج أو تفضل رؤية منتجات أخرى؟"
-        
-        elif any(word in message_lower for word in ['سعر', 'كم', 'price', 'cost', 'how much']):
-            return f"أسعارنا تتراوح من {min(item['price_jod'] for item in catalog_items)} إلى {max(item['price_jod'] for item in catalog_items)} دينار أردني. أي منتج تود معرفة سعره تحديداً؟"
-        
-        elif any(word in message_lower for word in ['متوفر', 'موجود', 'available', 'in stock']):
-            available_count = len([item for item in catalog_items if item['stock_quantity'] > 0])
-            return f"لدينا {available_count} منتج متوفر حالياً. هل تود رؤية قائمة المنتجات المتاحة؟"
-        
-        else:
-            return f"أهلاً وسهلاً بك! كيف يمكنني مساعدتك اليوم؟ لدينا {len(catalog_items)} منتج متوفر. يمكنك السؤال عن أي منتج أو سعر."
-        
-    except Exception as e:
-        logger.error(f"AI response generation error: {e}")
-        return "أعتذر، حدث خطأ في النظام. يرجى المحاولة مرة أخرى."
-
-@app.route('/api/ai/test-response', methods=['POST'])
-@async_route
-async def test_ai_response():
-    """Test AI agent response with real catalog data"""
-    try:
-        # Check authentication and get tenant_id
-        auth_header = request.headers.get('Authorization')
-        tenant_id = get_tenant_id_from_token(auth_header)
-        
-        if not tenant_id:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        data = request.get_json()
-        if not data or 'message' not in data:
-            return jsonify({'error': 'Missing message field'}), 400
-        
-        # Get customer message
-        customer_message = data['message']
-        
-        # Generate AI response using real catalog data
-        ai_response = await generate_ai_response(customer_message, tenant_id)
-        
-        return jsonify({
-            'success': True,
             'response': ai_response,
-            'processed_at': datetime.utcnow().isoformat()
+            'timestamp': datetime.utcnow().isoformat()
         })
         
     except Exception as e:
-        logger.error(f"AI test response error: {e}")
-        return jsonify({'error': 'Failed to generate AI response'}), 500
+        logger.error(f"AI chat error: {str(e)}")
+        return jsonify({'error': 'AI chat failed', 'details': str(e)}), 500
 
-# =============================================================================
-# ERROR HANDLERS
-# =============================================================================
+# Analytics
+@app.route('/api/analytics', methods=['GET'])
+@require_auth
+def get_analytics():
+    try:
+        user_id = request.current_user_id
+        
+        # Calculate basic analytics
+        total_products = Product.query.filter_by(user_id=user_id).count()
+        total_orders = Order.query.filter_by(user_id=user_id).count()
+        total_revenue = db.session.query(db.func.sum(Order.total_amount)).filter_by(user_id=user_id).scalar() or 0
+        
+        # Recent orders
+        recent_orders = Order.query.filter_by(user_id=user_id).order_by(Order.created_at.desc()).limit(5).all()
+        
+        return jsonify({
+            'analytics': {
+                'total_products': total_products,
+                'total_orders': total_orders,
+                'total_revenue': float(total_revenue),
+                'currency': 'JOD'
+            },
+            'recent_orders': [{
+                'id': o.id,
+                'customer_name': o.customer_name,
+                'total_amount': o.total_amount,
+                'status': o.status,
+                'created_at': o.created_at.isoformat()
+            } for o in recent_orders]
+        })
+    except Exception as e:
+        logger.error(f"Analytics error: {str(e)}")
+        return jsonify({'error': 'Failed to get analytics'}), 500
 
+# File Upload
+@app.route('/api/upload', methods=['POST'])
+@require_auth
+def upload_file():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if file:
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            
+            # In production, upload to Azure Blob Storage
+            file_url = f"/api/files/{filename}"
+            
+            return jsonify({
+                'message': 'File uploaded successfully',
+                'url': file_url,
+                'filename': filename
+            })
+    except Exception as e:
+        logger.error(f"Upload error: {str(e)}")
+        return jsonify({'error': 'Upload failed'}), 500
+
+@app.route('/api/files/<filename>')
+def serve_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+# Error handlers
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Endpoint not found'}), 404
@@ -628,21 +579,22 @@ def not_found(error):
 def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
-@app.errorhandler(RequestEntityTooLarge)
-def handle_file_too_large(error):
-    return jsonify({'error': 'File too large. Maximum size is 16MB'}), 413
+# Initialize database
+@app.before_first_request
+def create_tables():
+    try:
+        db.create_all()
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Database initialization error: {str(e)}")
 
 if __name__ == '__main__':
-    # For Azure Web App deployment - handle different port environment variables
-    port = int(os.environ.get('PORT', os.environ.get('WEBSITES_PORT', 8000)))
+    # Get port from environment variable or default to 8000
+    port = int(os.environ.get('PORT', 8000))
     
-    logger.info(f"Starting Flask application on port {port}")
-    logger.info(f"Debug mode: {settings.debug}")
-    logger.info(f"Environment: {settings.environment}")
-    
-    # For local development and Azure deployment
+    # Run the app
     app.run(
         host='0.0.0.0',
         port=port,
-        debug=settings.debug
+        debug=os.environ.get('FLASK_ENV') == 'development'
     ) 
