@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - 'infra/**'
+      - '.github/workflows/deploy-infrastructure.yml'
+      - '!infra/README.md'
+      - '!infra/**/*.md'
   workflow_dispatch:
     inputs:
       environment:
@@ -20,6 +23,10 @@ on:
 
 jobs:
   deploy-infrastructure:
+    # Prevent duplicate runs
+    if: |
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]')) ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment || 'dev' }}
     
@@ -27,7 +34,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Log in to Azure CLI
+    - name: Login to Azure
       uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -57,25 +64,29 @@ jobs:
     - name: Deploy infrastructure
       run: |
         echo "🚀 Deploying infrastructure to ${{ env.ENVIRONMENT }} environment..."
+        DEPLOYMENT_NAME="igshop-${{ env.ENVIRONMENT }}-$(date +%Y%m%d-%H%M%S)"
+        
         az deployment group create \
           --resource-group ${{ env.RESOURCE_GROUP }} \
           --template-file infra/main.bicep \
           --parameters @infra/parameters.${{ env.ENVIRONMENT }}.json \
-          --name "igshop-${{ env.ENVIRONMENT }}-$(date +%Y%m%d-%H%M%S)"
+          --name $DEPLOYMENT_NAME
         echo "✅ Infrastructure deployment completed"
         
     - name: Get deployment outputs
       id: outputs
       run: |
         echo "📤 Getting deployment outputs..."
+        DEPLOYMENT_NAME="igshop-${{ env.ENVIRONMENT }}-$(date +%Y%m%d-%H%M%S)"
+        
         API_URL=$(az deployment group show \
           --resource-group ${{ env.RESOURCE_GROUP }} \
-          --name "igshop-${{ env.ENVIRONMENT }}-$(date +%Y%m%d-%H%M%S)" \
+          --name $DEPLOYMENT_NAME \
           --query properties.outputs.apiWebAppUrl.value -o tsv)
         
         WEBAPP_URL=$(az deployment group show \
           --resource-group ${{ env.RESOURCE_GROUP }} \
-          --name "igshop-${{ env.ENVIRONMENT }}-$(date +%Y%m%d-%H%M%S)" \
+          --name $DEPLOYMENT_NAME \
           --query properties.outputs.staticWebAppUrl.value -o tsv)
         
         echo "api-url=$API_URL" >> $GITHUB_OUTPUT

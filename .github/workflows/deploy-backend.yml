@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+      - '!backend/README.md'
+      - '!backend/**/*.md'
   workflow_dispatch:
     inputs:
       environment:
@@ -20,6 +23,10 @@ on:
 
 jobs:
   deploy-backend:
+    # Prevent duplicate runs
+    if: |
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]')) ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment || 'dev' }}
     
@@ -65,7 +72,7 @@ jobs:
         print(f'✅ Routes: {len(list(app.url_map.iter_rules()))} routes configured')
         "
     
-    - name: Log in to Azure CLI
+    - name: Login to Azure
       uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}

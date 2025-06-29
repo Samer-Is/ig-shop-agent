@@ -4,10 +4,15 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'ig-shop-agent-dashboard/**'
+      - '.github/workflows/deploy-frontend.yml'
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
+    paths:
+      - 'ig-shop-agent-dashboard/**'
   workflow_dispatch:
     inputs:
       environment:
@@ -22,7 +27,11 @@ on:
 
 jobs:
   build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed') || github.event_name == 'workflow_dispatch'
+    # Prevent duplicate runs by checking event type and PR status
+    if: |
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]')) ||
+      (github.event_name == 'pull_request' && github.event.action != 'closed') ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     environment: ${{ github.event.inputs.environment || 'dev' }}
@@ -103,5 +112,5 @@ jobs:
         id: closepullrequest
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DEV }}
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           action: "close" 
