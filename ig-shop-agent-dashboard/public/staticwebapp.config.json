@@ -12,7 +12,7 @@
   ],
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/images/*.{png,jpg,gif,svg,jpeg}", "/favicon.ico"]
+    "exclude": ["/images/*.{png,jpg,gif,ico,svg}", "/api/*"]
   },
   "mimeTypes": {
     ".json": "application/json",
@@ -24,7 +24,8 @@
   },
   "responseOverrides": {
     "404": {
-      "rewrite": "/index.html"
+      "rewrite": "/index.html",
+      "statusCode": 200
     }
   }
 } 

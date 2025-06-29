@@ -96,7 +96,7 @@ export function Conversations() {
       const outgoingMessage: Conversation = {
         id: `msg_${Date.now()}`,
         tenant_id: 'current',
-        sender: selectedThread,
+        sender: selectedThread.sender,
         text: newMessage,
         ts: new Date().toISOString(),
         tokens_in: 0,
@@ -114,7 +114,7 @@ export function Conversations() {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
-          recipient: selectedThread,
+          recipient: selectedThread.sender,
           message: newMessage
         })
       });
