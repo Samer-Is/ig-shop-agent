@@ -1,0 +1,148 @@
+name: Deploy Backend Application
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    - name: Set environment variables
+      run: |
+        ENV="${{ github.event.inputs.environment || 'dev' }}"
+        echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
+        echo "APP_NAME=igshop-$ENV-api" >> $GITHUB_ENV
+        
+        if [ "$ENV" = "dev" ]; then
+          echo "RESOURCE_GROUP=igshop-dev-rg-v2" >> $GITHUB_ENV
+        elif [ "$ENV" = "staging" ]; then
+          echo "RESOURCE_GROUP=igshop-staging-rg" >> $GITHUB_ENV
+        else
+          echo "RESOURCE_GROUP=igshop-prod-rg" >> $GITHUB_ENV
+        fi
+        
+    - name: Install dependencies
+      run: |
+        cd backend
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Test Flask application
+      run: |
+        cd backend
+        python -c "
+        import os
+        os.environ['META_APP_ID'] = 'test'
+        os.environ['JWT_SECRET_KEY'] = 'test'
+        os.environ['OPENAI_API_KEY'] = 'test'
+        from production_app import app
+        print('✅ Flask app imports successfully')
+        print(f'✅ Routes: {len(list(app.url_map.iter_rules()))} routes configured')
+        "
+    
+    - name: Log in to Azure CLI
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        
+    - name: Configure Web App settings
+      run: |
+        echo "🔧 Configuring Azure Web App: ${{ env.APP_NAME }}"
+        
+        # Set runtime and startup command
+        az webapp config set \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name ${{ env.APP_NAME }} \
+          --linux-fx-version "PYTHON|3.12" \
+          --startup-file "gunicorn --bind=0.0.0.0 --timeout 600 production_app:app"
+        
+        # Get Key Vault name for this environment
+        KEYVAULT_NAME="igshop-${{ env.ENVIRONMENT }}-kv"
+        
+        # Configure app settings with Key Vault references
+        az webapp config appsettings set \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name ${{ env.APP_NAME }} \
+          --settings \
+            META_APP_ID="@Microsoft.KeyVault(VaultName=$KEYVAULT_NAME;SecretName=meta-app-id)" \
+            META_APP_SECRET="@Microsoft.KeyVault(VaultName=$KEYVAULT_NAME;SecretName=meta-app-secret)" \
+            OPENAI_API_KEY="@Microsoft.KeyVault(VaultName=$KEYVAULT_NAME;SecretName=openai-api-key)" \
+            JWT_SECRET_KEY="production-jwt-secret-${{ env.ENVIRONMENT }}-2024" \
+            META_REDIRECT_URI="https://${{ env.APP_NAME }}.azurewebsites.net/auth/instagram/callback" \
+            FLASK_ENV="production" \
+            ENVIRONMENT="${{ env.ENVIRONMENT }}" \
+            SCM_DO_BUILD_DURING_DEPLOYMENT="true" \
+            ENABLE_ORYX_BUILD="true"
+        
+        echo "✅ Web App configuration completed"
+        
+    - name: Prepare deployment package
+      run: |
+        cd backend
+        
+        # Clean up development artifacts
+        rm -rf __pycache__ .pytest_cache *.pyc
+        find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+        
+        # Ensure only production files
+        echo "✅ Files to deploy:"
+        ls -la
+        
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.APP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: './backend'
+
+    - name: Post-deployment verification
+      run: |
+        # Restart to apply all settings
+        echo "🔄 Restarting Web App..."
+        az webapp restart \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name ${{ env.APP_NAME }}
+        
+        # Wait for restart
+        echo "⏳ Waiting 30 seconds for restart..."
+        sleep 30
+
+        # Test deployment
+        APP_URL="https://${{ env.APP_NAME }}.azurewebsites.net"
+        echo "🔍 Testing deployment at: $APP_URL"
+        
+        # Test health endpoint
+        echo "Testing health endpoint..."
+        curl -f "$APP_URL/health" || echo "⚠️ Health endpoint test failed"
+        
+        # Test root endpoint
+        echo "Testing root endpoint..."
+        curl -f "$APP_URL/" || echo "⚠️ Root endpoint test failed"
+        
+        echo "✅ Backend deployment completed!"
+        echo "🔗 Backend URL: $APP_URL" 

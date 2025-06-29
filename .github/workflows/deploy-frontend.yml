@@ -1,0 +1,116 @@
+name: Deploy Frontend Application
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ig-shop-agent-dashboard/**'
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+jobs:
+  build_and_deploy_job:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          lfs: false
+          
+      - name: Set environment variables
+        run: |
+          ENV="${{ github.event.inputs.environment || 'dev' }}"
+          echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
+          
+          # Set Static Web App token based on environment
+          if [ "$ENV" = "dev" ]; then
+            echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DEV }}" >> $GITHUB_ENV
+          elif [ "$ENV" = "staging" ]; then
+            echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_STAGING }}" >> $GITHUB_ENV
+          else
+            echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROD }}" >> $GITHUB_ENV
+          fi
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      
+      - name: Install dependencies
+        run: |
+          cd ig-shop-agent-dashboard
+          pnpm install
+          
+      - name: Configure environment
+        run: |
+          cd ig-shop-agent-dashboard
+          
+          # Set backend API URL based on environment
+          if [ "${{ env.ENVIRONMENT }}" = "dev" ]; then
+            echo "VITE_API_BASE_URL=https://igshop-dev-api.azurewebsites.net" > .env.production
+          elif [ "${{ env.ENVIRONMENT }}" = "staging" ]; then
+            echo "VITE_API_BASE_URL=https://igshop-staging-api.azurewebsites.net" > .env.production
+          else
+            echo "VITE_API_BASE_URL=https://igshop-prod-api.azurewebsites.net" > .env.production
+          fi
+          
+          echo "VITE_ENVIRONMENT=${{ env.ENVIRONMENT }}" >> .env.production
+          
+          echo "✅ Environment configuration:"
+          cat .env.production
+      
+      - name: Build application
+        run: |
+          cd ig-shop-agent-dashboard
+          pnpm run build
+          
+          echo "✅ Build completed. Contents of dist directory:"
+          ls -la dist/
+      
+      - name: Deploy to Static Web App
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ env.SWA_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "ig-shop-agent-dashboard"
+          api_location: ""
+          output_location: "dist"
+          skip_app_build: true  # We build manually above
+
+  close_pull_request_job:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request Job
+    steps:
+      - name: Close Pull Request
+        id: closepullrequest
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DEV }}
+          action: "close" 

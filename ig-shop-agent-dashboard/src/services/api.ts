@@ -4,7 +4,7 @@
  */
 
 // Use the production backend URL
-const API_BASE_URL = 'https://igshop-dev-yjhtoi-api.azurewebsites.net';
+const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
 
 // Import types from main types file
 import type { KBDocument, Conversation } from '../types';

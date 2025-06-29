@@ -269,11 +269,10 @@ class DatabaseService:
 # Global database service instance
 db_service = DatabaseService()
 
-# Dependency for FastAPI
-async def get_db():
-    """FastAPI dependency to get database connection"""
-    async with db_service.get_connection() as conn:
-        yield conn
+# Database connection utility (Flask compatible)
+def get_db_connection():
+    """Get database connection for Flask app"""
+    return db_service
 
 # Database lifespan management
 @asynccontextmanager
@@ -287,4 +286,4 @@ async def database_lifespan():
         await db_service.disconnect()
 
 # Export for convenience
-__all__ = ["db_service", "get_db", "database_lifespan", "DatabaseService"] 
+__all__ = ["db_service", "get_db_connection", "database_lifespan", "DatabaseService"] 

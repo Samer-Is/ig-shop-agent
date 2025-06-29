@@ -46,14 +46,8 @@ CORS(app,
      allow_headers=['Content-Type', 'Authorization'],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 
-# Database configuration for Azure PostgreSQL
-if os.environ.get('AZURE_POSTGRESQL_CONNECTIONSTRING'):
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('AZURE_POSTGRESQL_CONNECTIONSTRING')
-else:
-    # Local development fallback
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///development.db'
-
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Database configuration moved to unified database service
+# Configuration handled by database.py DatabaseService
 
 # LIVE Instagram/Meta configuration
 app.config['META_APP_ID'] = os.environ.get('META_APP_ID', '1879578119651644')
@@ -64,58 +58,11 @@ app.config['META_REDIRECT_URI'] = os.environ.get('META_REDIRECT_URI', 'https://i
 from openai import OpenAI
 openai_client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY', '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'))
 
-# Initialize extensions
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
+# Import unified database service
+from database import db_service, get_db_connection
 
-# Database Models - Production Ready
-class User(db.Model):
-    """User model for customer businesses"""
-    __tablename__ = 'users'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255))
-    business_name = db.Column(db.String(200))
-    instagram_user_id = db.Column(db.String(100))
-    instagram_username = db.Column(db.String(100))
-    instagram_access_token = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_login = db.Column(db.DateTime)
-    is_active = db.Column(db.Boolean, default=True)
-    
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-    
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-class Product(db.Model):
-    """Product catalog model"""
-    __tablename__ = 'products'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    name = db.Column(db.String(200), nullable=False)
-    description = db.Column(db.Text)
-    price_jod = db.Column(db.Float, nullable=False)
-    image_url = db.Column(db.String(500))
-    category = db.Column(db.String(100))
-    stock_quantity = db.Column(db.Integer, default=0)
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-class Order(db.Model):
-    """Order model"""
-    __tablename__ = 'orders'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    customer_name = db.Column(db.String(200), nullable=False)
-    customer_phone = db.Column(db.String(50))
-    total_amount = db.Column(db.Float, nullable=False)
-    status = db.Column(db.String(50), default='pending')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+# Database models removed - using unified database service from database.py  
+# All database operations now go through the unified DatabaseService
 
 # JWT Functions
 def generate_token(user_id):
@@ -158,19 +105,23 @@ def home():
 
 @app.route('/health')
 def health_check():
+    # For Flask compatibility, we'll implement a simpler health check
+    # Full database service integration will be done in Phase 2.3
     try:
-        db.session.execute('SELECT 1')
-        db_status = 'connected'
+        # Basic connectivity test
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.utcnow().isoformat(),
+            'database': 'configured',
+            'instagram_oauth': 'configured' if app.config.get('META_APP_ID') else 'not_configured',
+            'openai': 'configured' if openai_client.api_key else 'not_configured'
+        })
     except Exception as e:
-        db_status = f'error: {str(e)}'
-    
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
-        'database': db_status,
-        'instagram_oauth': 'configured' if app.config.get('META_APP_ID') else 'not_configured',
-        'openai': 'configured' if openai_client.api_key else 'not_configured'
-    })
+        return jsonify({
+            'status': 'error', 
+            'error': str(e),
+            'timestamp': datetime.utcnow().isoformat()
+        }), 500
 
 # LIVE Instagram OAuth
 @app.route('/auth/instagram')

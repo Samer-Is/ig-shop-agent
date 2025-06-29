@@ -1,0 +1,113 @@
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infra/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+jobs:
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Log in to Azure CLI
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Set environment variables
+      run: |
+        ENV="${{ github.event.inputs.environment || 'dev' }}"
+        echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
+        
+        if [ "$ENV" = "dev" ]; then
+          echo "RESOURCE_GROUP=igshop-dev-rg-v2" >> $GITHUB_ENV
+        elif [ "$ENV" = "staging" ]; then
+          echo "RESOURCE_GROUP=igshop-staging-rg" >> $GITHUB_ENV
+        else
+          echo "RESOURCE_GROUP=igshop-prod-rg" >> $GITHUB_ENV
+        fi
+        
+    - name: Validate Bicep template
+      run: |
+        echo "🔍 Validating Bicep template for ${{ env.ENVIRONMENT }} environment..."
+        az deployment group validate \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --template-file infra/main.bicep \
+          --parameters @infra/parameters.${{ env.ENVIRONMENT }}.json
+        echo "✅ Template validation passed"
+        
+    - name: Deploy infrastructure
+      run: |
+        echo "🚀 Deploying infrastructure to ${{ env.ENVIRONMENT }} environment..."
+        az deployment group create \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --template-file infra/main.bicep \
+          --parameters @infra/parameters.${{ env.ENVIRONMENT }}.json \
+          --name "igshop-${{ env.ENVIRONMENT }}-$(date +%Y%m%d-%H%M%S)"
+        echo "✅ Infrastructure deployment completed"
+        
+    - name: Get deployment outputs
+      id: outputs
+      run: |
+        echo "📤 Getting deployment outputs..."
+        API_URL=$(az deployment group show \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name "igshop-${{ env.ENVIRONMENT }}-$(date +%Y%m%d-%H%M%S)" \
+          --query properties.outputs.apiWebAppUrl.value -o tsv)
+        
+        WEBAPP_URL=$(az deployment group show \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name "igshop-${{ env.ENVIRONMENT }}-$(date +%Y%m%d-%H%M%S)" \
+          --query properties.outputs.staticWebAppUrl.value -o tsv)
+        
+        echo "api-url=$API_URL" >> $GITHUB_OUTPUT
+        echo "webapp-url=$WEBAPP_URL" >> $GITHUB_OUTPUT
+        
+        echo "✅ API URL: $API_URL"
+        echo "✅ Web App URL: $WEBAPP_URL"
+        
+    - name: Configure Key Vault secrets
+      run: |
+        echo "🔑 Configuring Key Vault secrets..."
+        KEYVAULT_NAME="igshop-${{ env.ENVIRONMENT }}-kv"
+        
+        # Set application secrets
+        az keyvault secret set \
+          --vault-name $KEYVAULT_NAME \
+          --name "meta-app-id" \
+          --value "${{ secrets.META_APP_ID }}"
+          
+        az keyvault secret set \
+          --vault-name $KEYVAULT_NAME \
+          --name "meta-app-secret" \
+          --value "${{ secrets.META_APP_SECRET }}"
+          
+        az keyvault secret set \
+          --vault-name $KEYVAULT_NAME \
+          --name "openai-api-key" \
+          --value "${{ secrets.OPENAI_API_KEY }}"
+          
+        echo "✅ Key Vault secrets configured"
+        
+    outputs:
+      api-url: ${{ steps.outputs.outputs.api-url }}
+      webapp-url: ${{ steps.outputs.outputs.webapp-url }}
+      environment: ${{ env.ENVIRONMENT }} 
