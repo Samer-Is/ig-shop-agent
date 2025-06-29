@@ -8,6 +8,9 @@ import { Badge } from '../components/ui/badge';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Progress } from '../components/ui/progress';
 import { CheckCircle, Instagram, Upload, FileText, Settings, ArrowRight, AlertCircle } from 'lucide-react';
+import { apiService } from '../services/apiService';
+import { updateUser } from '../contexts/UserContext';
+import { user } from '../contexts/UserContext';
 
 interface OnboardingStep {
   id: string;
@@ -82,40 +85,80 @@ export function OnboardingWizard() {
     setError(null);
 
     try {
-      // Get Instagram OAuth configuration from backend
-      const configResponse = await fetch('https://igshop-dev-functions-v2.azurewebsites.net/api/instagram/config');
-      const config = await configResponse.json();
-
-      if (!configResponse.ok) {
-        throw new Error(config.error || 'Failed to get Instagram configuration');
+      // Get auth URL from our backend
+      const response = await apiService.getInstagramAuthUrl();
+      
+      if (response.error) {
+        setError(response.error);
+        setLoading(false);
+        return;
       }
 
-      // Create OAuth URL
-      const oauthUrl = `https://www.facebook.com/v18.0/dialog/oauth?` + 
-        new URLSearchParams({
-          client_id: config.app_id,
-          redirect_uri: config.redirect_uri,
-          scope: 'instagram_basic,instagram_manage_messages,pages_manage_metadata,pages_read_engagement',
-          response_type: 'code',
-          state: Math.random().toString(36).substring(2, 15)
-        });
+      const { auth_url, state } = response.data;
+      
+      // Store state in localStorage for verification
+      localStorage.setItem('oauth_state', state);
 
       // Open OAuth popup
-      const popup = window.open(oauthUrl, 'instagram-oauth', 'width=600,height=600');
+      const popup = window.open(
+        auth_url,
+        'instagram-oauth',
+        'width=600,height=800,scrollbars=yes'
+      );
+
+      if (!popup) {
+        throw new Error('Popup blocked. Please allow popups for this site.');
+      }
 
       // Listen for OAuth completion
-      const handleMessage = (event: MessageEvent) => {
+      const handleMessage = async (event: MessageEvent) => {
         if (event.origin !== window.location.origin) return;
 
         if (event.data.type === 'INSTAGRAM_OAUTH_SUCCESS') {
-          popup?.close();
-          handleOAuthSuccess(event.data.code);
-          window.removeEventListener('message', handleMessage);
+          const { code, state: returnedState } = event.data;
+          
+          // Verify state
+          const storedState = localStorage.getItem('oauth_state');
+          if (!storedState || storedState !== returnedState) {
+            setError('Invalid authentication response. Please try again.');
+            setLoading(false);
+            return;
+          }
+
+          try {
+            // Exchange code for token
+            const authResponse = await apiService.handleInstagramCallback(code, returnedState);
+            
+            if (authResponse.error) {
+              setError(authResponse.error);
+              setLoading(false);
+              return;
+            }
+
+            // Update user context with Instagram data
+            updateUser({
+              ...user,
+              instagram_connected: true,
+              instagram_handle: authResponse.data.instagram_handle
+            });
+
+            // Clear state
+            localStorage.removeItem('oauth_state');
+            
+            // Close popup and proceed
+            popup.close();
+            setLoading(false);
+            onNext();
+
+          } catch (error) {
+            console.error('Failed to complete Instagram authentication:', error);
+            setError('Failed to complete Instagram authentication. Please try again.');
+            setLoading(false);
+          }
         } else if (event.data.type === 'INSTAGRAM_OAUTH_ERROR') {
-          popup?.close();
-          setError('Instagram connection failed: ' + event.data.error_description);
+          popup.close();
+          setError(event.data.error_description || 'Instagram connection failed');
           setLoading(false);
-          window.removeEventListener('message', handleMessage);
         }
       };
 
@@ -123,39 +166,19 @@ export function OnboardingWizard() {
 
       // Handle popup closed without completion
       const checkClosed = setInterval(() => {
-        if (popup?.closed) {
+        if (popup.closed) {
           clearInterval(checkClosed);
           window.removeEventListener('message', handleMessage);
-          setLoading(false);
+          if (!user.instagram_connected) {
+            setError('Instagram connection cancelled');
+            setLoading(false);
+          }
         }
       }, 1000);
 
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to connect Instagram');
-      setLoading(false);
-    }
-  };
-
-  const handleOAuthSuccess = async (code: string) => {
-    try {
-      // Exchange code for access token
-      const response = await fetch('https://igshop-dev-functions-v2.azurewebsites.net/api/instagram/oauth/callback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        setInstagramConnected(true);
-        setBusinessProfile(prev => ({ ...prev, instagram_handle: result.instagram_handle || '' }));
-      } else {
-        throw new Error(result.error || 'Failed to complete Instagram connection');
-      }
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to complete OAuth');
-    } finally {
+      console.error('Instagram connection error:', error);
+      setError('Failed to connect to Instagram. Please try again.');
       setLoading(false);
     }
   };

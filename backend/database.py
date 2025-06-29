@@ -5,13 +5,16 @@ PostgreSQL with Row-Level Security and pgvector for multi-tenant SaaS
 import os
 import asyncpg
 import json
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncGenerator
 from datetime import datetime, timezone
 import logging
 from contextlib import asynccontextmanager
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+# Global database service instance
+db_service = None
 
 class DatabaseService:
     """Database service for managing PostgreSQL connections"""
@@ -64,11 +67,18 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Error disconnecting from database: {e}")
     
-    async def get_connection(self):
+    @asynccontextmanager
+    async def get_connection(self) -> AsyncGenerator[asyncpg.Connection, None]:
         """Get a database connection from the pool"""
         if not self.pool:
             await self.connect()
-        return self.pool.acquire()
+        
+        async with self.pool.acquire() as conn:
+            try:
+                yield conn
+            except Exception as e:
+                logger.error(f"Database error: {e}")
+                raise
     
     async def execute_query(self, query: str, *args) -> str:
         """Execute a query and return the result"""
@@ -211,28 +221,26 @@ class DatabaseService:
             logger.error(f"Failed to initialize database schema: {e}")
             return False
 
-# Database service singleton
-db_service = DatabaseService()
-
-def get_db_connection():
-    """Get database connection for synchronous code"""
-    import psycopg2
-    return psycopg2.connect(
-        host=settings.DATABASE_HOST,
-        port=settings.DATABASE_PORT,
-        user=settings.DATABASE_USER,
-        password=settings.DATABASE_PASSWORD,
-        database=settings.DATABASE_NAME
-    )
+async def get_db_connection() -> DatabaseService:
+    """Get the global database service instance"""
+    global db_service
+    
+    if db_service is None:
+        db_service = DatabaseService()
+        await db_service.connect()
+    
+    return db_service
 
 @asynccontextmanager
 async def database_lifespan():
-    """Database connection lifecycle manager"""
+    """Manage database connection lifecycle"""
     try:
-        await db_service.connect()
-        yield
+        db = await get_db_connection()
+        await db.initialize_schema()
+        yield db
     finally:
-        await db_service.disconnect()
+        if db_service:
+            await db_service.disconnect()
 
 # Export for convenience
 __all__ = ["db_service", "get_db_connection", "database_lifespan", "DatabaseService"] 

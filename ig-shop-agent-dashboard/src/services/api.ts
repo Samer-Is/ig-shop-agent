@@ -165,29 +165,71 @@ export class ApiService {
   }
 
   // Instagram OAuth
-  async getInstagramAuthUrl(): Promise<ApiResponse<{ auth_url: string }>> {
+  async getInstagramAuthUrl(): Promise<ApiResponse<{ auth_url: string; state: string }>> {
     try {
       const response = await this.api.get('/auth/instagram/login');
-      if (!response.data?.auth_url) {
-        throw new Error('Invalid response: missing auth_url');
+      const data = response.data;
+      
+      if (!data?.auth_url || !data?.state) {
+        throw new Error('Invalid response: missing auth_url or state');
       }
-      return { data: response.data };
+      
+      return { data };
     } catch (error: any) {
-      console.error('Failed to get Instagram auth URL:', error.response?.data || error);
-      return { error: error.response?.data?.detail || 'Failed to get Instagram authorization URL' };
+      console.error('Failed to get Instagram auth URL:', error);
+      
+      // Handle specific error cases
+      if (error.response?.status === 500 && error.response?.data?.detail) {
+        return { 
+          error: error.response.data.detail 
+        };
+      }
+      
+      // Handle network errors
+      if (error.code === 'ECONNABORTED' || !error.response) {
+        return { 
+          error: 'Network error: Please check your internet connection and try again.' 
+        };
+      }
+      
+      // Default error
+      return { 
+        error: 'Failed to get Instagram authorization URL. Please try again later.' 
+      };
     }
   }
 
-  async handleInstagramCallback(code: string, state: string): Promise<ApiResponse> {
+  async handleInstagramCallback(code: string, state: string): Promise<ApiResponse<any>> {
     try {
       const response = await this.api.post('/auth/instagram/callback', { code, state });
-      if (!response.data?.success) {
-        throw new Error('Instagram authentication failed');
-      }
       return { data: response.data };
     } catch (error: any) {
-      console.error('Instagram callback error:', error.response?.data || error);
-      return { error: error.response?.data?.detail || 'Failed to complete Instagram authentication' };
+      console.error('Instagram callback error:', error);
+      
+      // Handle specific error cases
+      if (error.response?.status === 400) {
+        return { 
+          error: error.response.data.detail || 'Invalid authentication request. Please try again.' 
+        };
+      }
+      
+      if (error.response?.status === 500) {
+        return { 
+          error: error.response.data.detail || 'Server error during authentication. Please try again later.' 
+        };
+      }
+      
+      // Handle network errors
+      if (error.code === 'ECONNABORTED' || !error.response) {
+        return { 
+          error: 'Network error: Please check your internet connection and try again.' 
+        };
+      }
+      
+      // Default error
+      return { 
+        error: 'Failed to complete Instagram authentication. Please try again.' 
+      };
     }
   }
 
