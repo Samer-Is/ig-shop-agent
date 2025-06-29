@@ -25,7 +25,7 @@ jobs:
       run: |
         cd backend
         python -m pip install --upgrade pip
-        pip install -r requirements_minimal.txt
+        pip install -r requirements.txt
         
     - name: Test production Flask app
       run: |
@@ -74,13 +74,10 @@ jobs:
     - name: Create deployment package
       run: |
         cd backend
-        # Create minimal deployment package
+        # Clean up unnecessary files
         rm -rf __pycache__
         rm -rf .pytest_cache
         rm -f test_*.py
-        
-        # Copy minimal requirements
-        cp requirements_minimal.txt requirements.txt
         
         echo "✅ Production deployment package prepared"
         echo "Files to deploy:"
