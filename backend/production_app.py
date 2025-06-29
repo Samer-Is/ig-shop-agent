@@ -47,50 +47,16 @@ CORS(app,
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 
 # Database configuration moved to unified database service
-# Configuration handled by database.py DatabaseService
+from database import db_service, get_db_connection
 
 # LIVE Instagram/Meta configuration
 app.config['META_APP_ID'] = os.environ.get('META_APP_ID', '1879578119651644')
 app.config['META_APP_SECRET'] = os.environ.get('META_APP_SECRET', 'f79b3350f43751d6139e1b29a232cbf3')
-app.config['META_REDIRECT_URI'] = os.environ.get('META_REDIRECT_URI', 'https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/callback')
+app.config['META_REDIRECT_URI'] = os.environ.get('META_REDIRECT_URI', 'https://igshop-api.azurewebsites.net/auth/instagram/callback')
 
 # LIVE OpenAI configuration
 from openai import OpenAI
 openai_client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY', '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'))
-
-# Import unified database service
-from database import db_service, get_db_connection
-
-# Database models removed - using unified database service from database.py  
-# All database operations now go through the unified DatabaseService
-
-# JWT Functions
-def generate_token(user_id):
-    payload = {
-        'user_id': user_id,
-        'exp': datetime.utcnow() + timedelta(days=30)
-    }
-    return jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
-
-def verify_token(token):
-    try:
-        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-        return payload['user_id']
-    except:
-        return None
-
-def require_auth(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        token = request.headers.get('Authorization')
-        if token and token.startswith('Bearer '):
-            token = token[7:]
-            user_id = verify_token(token)
-            if user_id:
-                request.current_user_id = user_id
-                return f(*args, **kwargs)
-        return jsonify({'error': 'Authentication required'}), 401
-    return decorated_function
 
 # Routes
 @app.route('/')
@@ -105,32 +71,35 @@ def home():
 
 @app.route('/health')
 def health_check():
-    # For Flask compatibility, we'll implement a simpler health check
-    # Full database service integration will be done in Phase 2.3
     try:
-        # Basic connectivity test
+        # Test database connection
+        db = get_db_connection()
+        db.execute('SELECT 1')
+        
+        # Test OpenAI connection
+        openai_client.models.list()
+        
         return jsonify({
             'status': 'healthy',
             'timestamp': datetime.utcnow().isoformat(),
-            'database': 'configured',
-            'instagram_oauth': 'configured' if app.config.get('META_APP_ID') else 'not_configured',
-            'openai': 'configured' if openai_client.api_key else 'not_configured'
+            'database': 'connected',
+            'instagram_oauth': 'configured',
+            'openai': 'connected'
         })
     except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
         return jsonify({
-            'status': 'error', 
+            'status': 'error',
             'error': str(e),
             'timestamp': datetime.utcnow().isoformat()
-        }), 500
+        }), 503
 
 # LIVE Instagram OAuth
-@app.route('/auth/instagram')
-@require_auth  
-def instagram_auth():
+@app.route('/auth/instagram/login')
+def instagram_login():
     try:
         state = str(uuid.uuid4())
         session['oauth_state'] = state
-        session['user_id'] = request.current_user_id
         
         auth_url = (
             f"https://api.instagram.com/oauth/authorize"
@@ -143,21 +112,18 @@ def instagram_auth():
         
         return jsonify({
             'auth_url': auth_url,
-            'status': 'ready'
+            'state': state
         })
     except Exception as e:
         logger.error(f"Instagram auth error: {str(e)}")
         return jsonify({'error': 'Instagram auth failed'}), 500
 
-@app.route('/auth/instagram/callback')
+@app.route('/auth/instagram/callback', methods=['POST'])
 def instagram_callback():
     try:
-        code = request.args.get('code')
-        state = request.args.get('state')
-        error = request.args.get('error')
-        
-        if error:
-            return jsonify({'error': f'Instagram OAuth error: {error}'}), 400
+        data = request.get_json()
+        code = data.get('code')
+        state = data.get('state')
         
         if not code or not state:
             return jsonify({'error': 'Missing code or state'}), 400
@@ -186,20 +152,43 @@ def instagram_callback():
         user_info_response = requests.get(user_info_url)
         user_info = user_info_response.json()
         
-        # Update user with Instagram info
-        user_id = session.get('user_id')
-        if user_id:
-            user = User.query.get(user_id)
-            if user:
-                user.instagram_user_id = user_info.get('id')
-                user.instagram_username = user_info.get('username')
-                user.instagram_access_token = token_result['access_token']
-                db.session.commit()
+        # Create or update user
+        instagram_handle = user_info.get('username')
+        user = User.query.filter_by(instagram_handle=instagram_handle).first()
+        
+        if not user:
+            user = User(
+                instagram_handle=instagram_handle,
+                instagram_user_id=user_info.get('id'),
+                instagram_access_token=token_result['access_token'],
+                instagram_connected=True
+            )
+            db.session.add(user)
+        else:
+            user.instagram_user_id = user_info.get('id')
+            user.instagram_access_token = token_result['access_token']
+            user.instagram_connected = True
+            
+        db.session.commit()
+        
+        # Generate JWT token
+        token = jwt.encode(
+            {
+                'user_id': user.id,
+                'instagram_handle': user.instagram_handle,
+                'exp': datetime.utcnow() + timedelta(days=30)
+            },
+            app.config['SECRET_KEY'],
+            algorithm='HS256'
+        )
         
         return jsonify({
-            'message': 'Instagram connected successfully',
-            'instagram_username': user_info.get('username'),
-            'status': 'connected'
+            'token': token,
+            'user': {
+                'id': user.id,
+                'instagram_handle': user.instagram_handle,
+                'instagram_connected': True
+            }
         })
         
     except Exception as e:
@@ -467,6 +456,8 @@ def create_tables():
 # Create tables when module loads
 create_tables()
 
+# WSGI entry point
+application = app
+
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))

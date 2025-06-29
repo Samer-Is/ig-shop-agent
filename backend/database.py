@@ -135,38 +135,21 @@ class DatabaseService:
             
             # Create tables if they don't exist
             schema_sql = """
-            -- Tenants table
-            CREATE TABLE IF NOT EXISTS tenants (
-                id TEXT PRIMARY KEY,
-                instagram_handle TEXT UNIQUE NOT NULL,
-                display_name TEXT NOT NULL,
-                plan TEXT NOT NULL DEFAULT 'starter' CHECK (plan IN ('starter', 'professional', 'enterprise')),
-                status TEXT NOT NULL DEFAULT 'trial' CHECK (status IN ('active', 'suspended', 'trial')),
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-            
-            -- Users table
+            -- Users table (simplified for Instagram OAuth)
             CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-                email TEXT UNIQUE NOT NULL,
-                role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('admin', 'manager', 'agent')),
-                last_login TIMESTAMP WITH TIME ZONE,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-            
-            -- Meta tokens table
-            CREATE TABLE IF NOT EXISTS meta_tokens (
-                tenant_id TEXT PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
-                access_token TEXT NOT NULL,
-                expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+                instagram_handle TEXT UNIQUE NOT NULL,
+                instagram_user_id TEXT UNIQUE,
+                instagram_access_token TEXT,
+                instagram_connected BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
             
             -- Catalog items table
             CREATE TABLE IF NOT EXISTS catalog_items (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 sku TEXT NOT NULL,
                 name TEXT NOT NULL,
                 price_jod DECIMAL(10,2) NOT NULL,
@@ -177,13 +160,13 @@ class DatabaseService:
                 stock_quantity INTEGER,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                UNIQUE(tenant_id, sku)
+                UNIQUE(user_id, sku)
             );
             
             -- Orders table
             CREATE TABLE IF NOT EXISTS orders (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 sku TEXT NOT NULL,
                 qty INTEGER NOT NULL,
                 customer TEXT NOT NULL,
@@ -198,62 +181,24 @@ class DatabaseService:
             
             -- Knowledge base documents table
             CREATE TABLE IF NOT EXISTS kb_documents (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-                file_uri TEXT NOT NULL,
+                id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 title TEXT NOT NULL,
-                vector_id TEXT NOT NULL,
-                content_preview TEXT,
-                file_type TEXT NOT NULL,
-                file_size BIGINT NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-            
-            -- Business profiles table
-            CREATE TABLE IF NOT EXISTS business_profiles (
-                tenant_id TEXT PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
-                yaml_profile JSONB NOT NULL,
+                content TEXT NOT NULL,
+                vector_id TEXT UNIQUE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
             
             -- Conversations table
             CREATE TABLE IF NOT EXISTS conversations (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-                sender TEXT NOT NULL,
-                text TEXT NOT NULL,
-                ts TIMESTAMP WITH TIME ZONE NOT NULL,
-                tokens_in INTEGER DEFAULT 0,
-                tokens_out INTEGER DEFAULT 0,
-                message_type TEXT NOT NULL CHECK (message_type IN ('incoming', 'outgoing')),
-                ai_generated BOOLEAN DEFAULT FALSE,
-                context JSONB DEFAULT '{}'
+                id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                customer TEXT NOT NULL,
+                message TEXT NOT NULL,
+                is_ai_response BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
-            
-            -- Usage stats table
-            CREATE TABLE IF NOT EXISTS usage_stats (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-                date DATE NOT NULL,
-                openai_cost_usd DECIMAL(10,4) DEFAULT 0,
-                meta_messages INTEGER DEFAULT 0,
-                total_conversations INTEGER DEFAULT 0,
-                orders_created INTEGER DEFAULT 0,
-                customer_satisfaction DECIMAL(3,2),
-                UNIQUE(tenant_id, date)
-            );
-            
-            -- Create indexes for better performance
-            CREATE INDEX IF NOT EXISTS idx_catalog_items_tenant_id ON catalog_items(tenant_id);
-            CREATE INDEX IF NOT EXISTS idx_catalog_items_sku ON catalog_items(tenant_id, sku);
-            CREATE INDEX IF NOT EXISTS idx_orders_tenant_id ON orders(tenant_id);
-            CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(tenant_id, status);
-            CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
-            CREATE INDEX IF NOT EXISTS idx_conversations_tenant_id ON conversations(tenant_id);
-            CREATE INDEX IF NOT EXISTS idx_conversations_ts ON conversations(ts);
-            CREATE INDEX IF NOT EXISTS idx_kb_documents_tenant_id ON kb_documents(tenant_id);
-            CREATE INDEX IF NOT EXISTS idx_usage_stats_tenant_date ON usage_stats(tenant_id, date);
             """
             
             async with self.get_connection() as conn:
@@ -266,22 +211,26 @@ class DatabaseService:
             logger.error(f"Failed to initialize database schema: {e}")
             return False
 
-# Global database service instance
+# Database service singleton
 db_service = DatabaseService()
 
-# Database connection utility (Flask compatible)
 def get_db_connection():
-    """Get database connection for Flask app"""
-    return db_service
+    """Get database connection for synchronous code"""
+    import psycopg2
+    return psycopg2.connect(
+        host=settings.DATABASE_HOST,
+        port=settings.DATABASE_PORT,
+        user=settings.DATABASE_USER,
+        password=settings.DATABASE_PASSWORD,
+        database=settings.DATABASE_NAME
+    )
 
-# Database lifespan management
 @asynccontextmanager
 async def database_lifespan():
-    """Context manager for database lifecycle"""
+    """Database connection lifecycle manager"""
     try:
         await db_service.connect()
-        await db_service.initialize_schema()
-        yield db_service
+        yield
     finally:
         await db_service.disconnect()
 

@@ -4,7 +4,9 @@
  */
 
 // Use the production backend URL
-const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://igshop-api.azurewebsites.net'
+  : 'http://localhost:8000';
 
 // Import types from main types file
 import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
@@ -19,13 +21,16 @@ interface ApiResponse<T> {
 // Authentication interfaces
 interface InstagramAuthResponse {
   auth_url: string;
-  status: string;
+  state: string;
 }
 
 interface InstagramCallbackResponse {
-  message: string;
-  instagram_username: string;
-  status: string;
+  token: string;
+  user: {
+    id: number;
+    instagram_handle: string;
+    instagram_connected: boolean;
+  };
 }
 
 interface LoginRequest {
@@ -230,14 +235,14 @@ class ApiService {
 
   // Instagram OAuth - Updated to match backend
   async getInstagramAuthUrl(): Promise<ApiResponse<InstagramAuthResponse>> {
-    return this.request('/auth/instagram');
+    return this.request<InstagramAuthResponse>('/auth/instagram/login');
   }
 
-  // This method handles the callback differently since backend handles it directly
   async handleInstagramCallback(code: string, state: string): Promise<ApiResponse<InstagramCallbackResponse>> {
-    // The backend handles this automatically via /auth/instagram/callback
-    // This is just for the frontend to know the result
-    return { data: { message: 'Handled by backend', instagram_username: '', status: 'success' }, status: 200 };
+    return this.request<InstagramCallbackResponse>('/auth/instagram/callback', {
+      method: 'POST',
+      body: JSON.stringify({ code, state }),
+    });
   }
 
   // Catalog Management - Updated to match backend
