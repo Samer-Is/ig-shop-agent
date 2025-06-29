@@ -58,8 +58,9 @@ jobs:
         cd backend
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install asyncpg uvicorn[standard] fastapi
         
-    - name: Test Flask application
+    - name: Test FastAPI application
       run: |
         cd backend
         python -c "
@@ -68,8 +69,8 @@ jobs:
         os.environ['JWT_SECRET_KEY'] = 'test'
         os.environ['OPENAI_API_KEY'] = 'test'
         from production_app import app
-        print('✅ Flask app imports successfully')
-        print(f'✅ Routes: {len(list(app.url_map.iter_rules()))} routes configured')
+        print('✅ FastAPI app imports successfully')
+        print(f'✅ Routes: {len(app.routes)} routes configured')
         "
     
     - name: Login to Azure
@@ -86,7 +87,7 @@ jobs:
           --resource-group ${{ env.RESOURCE_GROUP }} \
           --name ${{ env.APP_NAME }} \
           --linux-fx-version "PYTHON|3.12" \
-          --startup-file "gunicorn --bind=0.0.0.0 --timeout 600 production_app:app"
+          --startup-file "uvicorn production_app:app --host 0.0.0.0 --port 8000"
         
         # Get Key Vault name for this environment
         KEYVAULT_NAME="igshop-${{ env.ENVIRONMENT }}-kv"
@@ -101,10 +102,10 @@ jobs:
             OPENAI_API_KEY="@Microsoft.KeyVault(VaultName=$KEYVAULT_NAME;SecretName=openai-api-key)" \
             JWT_SECRET_KEY="production-jwt-secret-${{ env.ENVIRONMENT }}-2024" \
             META_REDIRECT_URI="https://${{ env.APP_NAME }}.azurewebsites.net/auth/instagram/callback" \
-            FLASK_ENV="production" \
             ENVIRONMENT="${{ env.ENVIRONMENT }}" \
             SCM_DO_BUILD_DURING_DEPLOYMENT="true" \
-            ENABLE_ORYX_BUILD="true"
+            ENABLE_ORYX_BUILD="true" \
+            PORT="8000"
         
         echo "✅ Web App configuration completed"
         
