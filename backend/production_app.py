@@ -101,15 +101,17 @@ def instagram_login():
         state = str(uuid.uuid4())
         session['oauth_state'] = state
         
+        # Use Facebook Graph API OAuth endpoint instead of Instagram's direct endpoint
         auth_url = (
-            f"https://api.instagram.com/oauth/authorize"
+            f"https://www.facebook.com/v18.0/dialog/oauth"
             f"?client_id={app.config['META_APP_ID']}"
             f"&redirect_uri={app.config['META_REDIRECT_URI']}"
-            f"&scope=user_profile,user_media"
+            f"&scope=instagram_basic,instagram_manage_messages,pages_show_list,pages_manage_metadata,pages_read_engagement"
             f"&response_type=code"
             f"&state={state}"
         )
         
+        logger.info(f"Generated Instagram auth URL with state {state}")
         return jsonify({
             'auth_url': auth_url,
             'state': state
@@ -131,12 +133,11 @@ def instagram_callback():
         if session.get('oauth_state') != state:
             return jsonify({'error': 'Invalid state parameter'}), 400
         
-        # Exchange code for access token
-        token_url = 'https://api.instagram.com/oauth/access_token'
+        # Exchange code for access token using Facebook Graph API
+        token_url = 'https://graph.facebook.com/v18.0/oauth/access_token'
         token_data = {
             'client_id': app.config['META_APP_ID'],
             'client_secret': app.config['META_APP_SECRET'],
-            'grant_type': 'authorization_code',
             'redirect_uri': app.config['META_REDIRECT_URI'],
             'code': code
         }
@@ -145,55 +146,62 @@ def instagram_callback():
         token_result = token_response.json()
         
         if 'access_token' not in token_result:
+            logger.error(f"Token exchange failed: {token_result}")
             return jsonify({'error': 'Failed to get access token'}), 400
         
-        # Get Instagram user info
-        user_info_url = f"https://graph.instagram.com/me?fields=id,username&access_token={token_result['access_token']}"
-        user_info_response = requests.get(user_info_url)
-        user_info = user_info_response.json()
+        # Get Facebook Pages (required for Instagram Business)
+        pages_url = f"https://graph.facebook.com/v18.0/me/accounts"
+        pages_response = requests.get(pages_url, params={
+            'access_token': token_result['access_token'],
+            'fields': 'instagram_business_account,name,access_token'
+        })
+        pages_data = pages_response.json()
         
-        # Create or update user
-        instagram_handle = user_info.get('username')
-        user = User.query.filter_by(instagram_handle=instagram_handle).first()
-        
-        if not user:
-            user = User(
-                instagram_handle=instagram_handle,
-                instagram_user_id=user_info.get('id'),
-                instagram_access_token=token_result['access_token'],
-                instagram_connected=True
-            )
-            db.session.add(user)
-        else:
-            user.instagram_user_id = user_info.get('id')
-            user.instagram_access_token = token_result['access_token']
-            user.instagram_connected = True
+        if 'data' not in pages_data or not pages_data['data']:
+            logger.error("No Facebook pages found")
+            return jsonify({'error': 'No Facebook pages found'}), 400
             
-        db.session.commit()
+        # Find page with Instagram account
+        instagram_page = None
+        for page in pages_data['data']:
+            if 'instagram_business_account' in page:
+                instagram_page = page
+                break
+                
+        if not instagram_page:
+            logger.error("No Instagram business account found")
+            return jsonify({'error': 'No Instagram business account found'}), 400
+            
+        # Get Instagram account details
+        instagram_account_id = instagram_page['instagram_business_account']['id']
+        instagram_url = f"https://graph.facebook.com/v18.0/{instagram_account_id}"
+        instagram_response = requests.get(instagram_url, params={
+            'access_token': instagram_page['access_token'],
+            'fields': 'id,username,name,profile_picture_url'
+        })
+        instagram_data = instagram_response.json()
         
-        # Generate JWT token
-        token = jwt.encode(
-            {
-                'user_id': user.id,
-                'instagram_handle': user.instagram_handle,
-                'exp': datetime.utcnow() + timedelta(days=30)
-            },
-            app.config['SECRET_KEY'],
-            algorithm='HS256'
-        )
-        
+        if 'username' not in instagram_data:
+            logger.error(f"Failed to get Instagram details: {instagram_data}")
+            return jsonify({'error': 'Failed to get Instagram account details'}), 400
+            
+        # Return success with Instagram account data
         return jsonify({
-            'token': token,
+            'success': True,
+            'instagram_handle': instagram_data['username'],
+            'token': instagram_page['access_token'],
             'user': {
-                'id': user.id,
-                'instagram_handle': user.instagram_handle,
-                'instagram_connected': True
+                'id': instagram_data['id'],
+                'instagram_handle': instagram_data['username'],
+                'instagram_connected': True,
+                'name': instagram_data.get('name', ''),
+                'profile_picture_url': instagram_data.get('profile_picture_url', '')
             }
         })
-        
+            
     except Exception as e:
         logger.error(f"Instagram callback error: {str(e)}")
-        return jsonify({'error': 'Instagram connection failed'}), 500
+        return jsonify({'error': str(e)}), 500
 
 # Authentication
 @app.route('/auth/register', methods=['POST'])

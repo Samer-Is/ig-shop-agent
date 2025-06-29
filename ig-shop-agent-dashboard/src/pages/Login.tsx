@@ -52,12 +52,24 @@ export function Login() {
     try {
       const response = await apiService.handleInstagramCallback(code, state);
       
-      if (response.data?.token && response.data?.user) {
-        // Successfully connected Instagram and got auth token
-        login(response.data.token, response.data.user);
+      if (response.data?.success && response.data?.token && response.data?.user) {
+        // Store additional user data in context
+        const userData = {
+          ...response.data.user,
+          token: response.data.token,
+          instagram_handle: response.data.instagram_handle
+        };
+        
+        // Log successful connection
+        console.log('Successfully connected Instagram account:', userData.instagram_handle);
+        
+        // Login and redirect
+        login(response.data.token, userData);
         navigate('/dashboard');
       } else {
-        setError(response.error || 'Failed to connect Instagram');
+        const errorMessage = response.error || 'Failed to connect Instagram';
+        console.error('Instagram connection error:', errorMessage);
+        setError(errorMessage);
       }
     } catch (err) {
       console.error('Instagram callback error:', err);
@@ -78,10 +90,20 @@ export function Login() {
         // Store current URL for redirect back after auth
         sessionStorage.setItem('auth_redirect', window.location.href);
         
+        // Store state parameter
+        if (response.data.state) {
+          sessionStorage.setItem('oauth_state', response.data.state);
+        }
+        
+        // Log the redirect
+        console.log('Redirecting to Instagram OAuth URL');
+        
         // Redirect to Instagram OAuth
         window.location.href = response.data.auth_url;
       } else {
-        setError(response.error || 'Failed to get Instagram login URL');
+        const errorMessage = response.error || 'Failed to get Instagram login URL';
+        console.error('Instagram login error:', errorMessage);
+        setError(errorMessage);
       }
     } catch (err) {
       console.error('Instagram login error:', err);
