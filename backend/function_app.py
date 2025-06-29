@@ -213,8 +213,8 @@ def instagram_config(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse("", status_code=200, headers=cors_headers())
     
     response_data = {
-        "app_id": "1234567890123456",  # Demo Instagram App ID - replace with real one
-        "redirect_uri": "https://red-island-0b863450f.2.azurestaticapps.net/oauth-callback.html",
+        "app_id": settings.meta_app_id,  # Real Instagram App ID from environment
+        "redirect_uri": f"{frontend_url}/auth/callback",
         "webhook_url": "https://igshop-dev-functions-v2.azurewebsites.net/api/webhook/instagram",
         "verify_token": "igshop_webhook_verify_2024",
         "status": "ready for demo"

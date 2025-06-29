@@ -122,7 +122,7 @@ def instagram_callback():
         if not auth_data:
             return jsonify({'error': 'Failed to authenticate with Instagram'}), 400
         
-        # Create or get tenant (simplified - using mock data for now)
+        # Create or get tenant from database
         instagram_accounts = auth_data['instagram_accounts']
         if not instagram_accounts:
             return jsonify({'error': 'No Instagram business accounts found'}), 400
