@@ -25,19 +25,18 @@ jobs:
       run: |
         cd backend
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r requirements_minimal.txt
         
-    - name: Test Flask app import
+    - name: Test production Flask app
       run: |
         cd backend
         python -c "
         import os
         os.environ['META_APP_ID'] = 'test'
-        os.environ['META_APP_SECRET'] = 'test'
         os.environ['JWT_SECRET_KEY'] = 'test'
         os.environ['OPENAI_API_KEY'] = 'test'
-        from app_simple import app
-        print('✅ Flask app imports successfully')
+        from production_app import app
+        print('✅ Production Flask app imports successfully')
         print(f'✅ Routes: {len(list(app.url_map.iter_rules()))} routes configured')
         "
     
@@ -46,7 +45,7 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
         
-    - name: Configure Azure Web App for Python
+    - name: Configure Azure Web App
       run: |
         # Set the runtime stack to Python 3.11
         az webapp config set \
@@ -54,35 +53,38 @@ jobs:
           --name igshop-dev-yjhtoi-api \
           --linux-fx-version "PYTHON|3.11"
         
-        # Configure startup command
+        # Configure startup command for production app
         az webapp config set \
           --resource-group igshop-dev-rg-v2 \
           --name igshop-dev-yjhtoi-api \
-          --startup-file "gunicorn --bind=0.0.0.0 --timeout 600 app_simple:app"
+          --startup-file "gunicorn --bind=0.0.0.0 --timeout 600 production_app:app"
         
-        # Enable build automation
+        # Set environment variables
         az webapp config appsettings set \
           --resource-group igshop-dev-rg-v2 \
           --name igshop-dev-yjhtoi-api \
-          --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
+          --settings \
+            META_APP_ID="${{ secrets.META_APP_ID }}" \
+            META_APP_SECRET="${{ secrets.META_APP_SECRET }}" \
+            OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+            JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" \
+            META_REDIRECT_URI="https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/callback" \
+            SCM_DO_BUILD_DURING_DEPLOYMENT=true
         
     - name: Create deployment package
       run: |
         cd backend
-        # Remove test files and cache
+        # Create minimal deployment package
         rm -rf __pycache__
         rm -rf .pytest_cache
         rm -f test_*.py
         
-        # Ensure requirements.txt is present
-        if [ ! -f requirements.txt ]; then
-          echo "Error: requirements.txt not found!"
-          exit 1
-        fi
+        # Copy minimal requirements
+        cp requirements_minimal.txt requirements.txt
         
-        echo "✅ Deployment package prepared"
+        echo "✅ Production deployment package prepared"
         echo "Files to deploy:"
-        ls -la
+        ls -la production_app.py requirements.txt
         
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
@@ -94,11 +96,10 @@ jobs:
     - name: Test deployment
       run: |
         echo "Deployment completed!"
-        echo "Backend should be available at: https://igshop-dev-yjhtoi-api.azurewebsites.net"
-        echo "Health check: https://igshop-dev-yjhtoi-api.azurewebsites.net/health"
+        echo "Backend available at: https://igshop-dev-yjhtoi-api.azurewebsites.net"
         
-        # Wait a bit for the app to start
-        sleep 30
+        # Wait for the app to start
+        sleep 60
         
         # Test the health endpoint
-        curl -f https://igshop-dev-yjhtoi-api.azurewebsites.net/health || echo "Health check failed (app may still be starting)" 
+        curl -f https://igshop-dev-yjhtoi-api.azurewebsites.net/health && echo "✅ Health check passed!" || echo "❌ Health check failed" 
