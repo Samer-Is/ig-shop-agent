@@ -1,7 +1,13 @@
 #!/bin/bash
 
-# Activate Python environment
+# Navigate to app directory
 cd /home/site/wwwroot
+
+# Create and activate virtual environment if it doesn't exist
+if [ ! -d "antenv" ]; then
+    python -m venv antenv
+fi
+source antenv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt

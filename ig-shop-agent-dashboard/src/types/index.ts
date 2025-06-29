@@ -9,7 +9,9 @@ export interface Tenant {
 }
 
 export interface User {
-  id: number | string;  // Support both for backend compatibility
+  id: number;
+  instagram_handle: string;
+  instagram_connected: boolean;
   tenant_id?: string;
   email: string;
   business_name?: string;
@@ -18,7 +20,6 @@ export interface User {
   role?: 'admin' | 'manager' | 'agent';
   last_login?: string;
   created_at?: string;
-  instagram_connected?: boolean;
 }
 
 export interface MetaToken {
@@ -29,44 +30,35 @@ export interface MetaToken {
 }
 
 export interface CatalogItem {
-  id: string;
-  tenant_id: string;
+  id: number;
   sku: string;
   name: string;
-  price_jod: number;
-  media_url: string;
-  extras: Record<string, any>;
   description?: string;
+  price_jod: number;
   category?: string;
+  media_url?: string;
   stock_quantity?: number;
+  is_active: boolean;
   created_at: string;
-  updated_at: string;
 }
 
 export interface Order {
-  id: string;
-  tenant_id: string;
+  id: number;
   sku: string;
   qty: number;
   customer: string;
   phone: string;
   status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
   total_amount: number;
-  created_at: string;
-  updated_at: string;
   delivery_address?: string;
   notes?: string;
+  created_at: string;
 }
 
 export interface KBDocument {
-  id: string;
-  tenant_id: string;
-  file_uri: string;
+  id: number;
   title: string;
-  vector_id: string;
-  content_preview?: string;
-  file_type: string;
-  file_size: number;
+  content: string;
   created_at: string;
 }
 
@@ -106,16 +98,11 @@ export interface BusinessProfile {
 }
 
 export interface Conversation {
-  id: string;
-  tenant_id: string;
-  sender: string;
-  text: string;
-  ts: string;
-  tokens_in: number;
-  tokens_out: number;
-  message_type: 'incoming' | 'outgoing';
-  ai_generated: boolean;
-  context?: Record<string, any>;
+  id: number;
+  customer: string;
+  message: string;
+  is_ai_response: boolean;
+  created_at: string;
 }
 
 export interface UsageStats {
@@ -154,4 +141,10 @@ export interface DashboardStats {
   conversion_rate: number;
   top_products: CatalogItem[];
   recent_orders: Order[];
+}
+
+export interface AuthState {
+  isAuthenticated: boolean;
+  token: string | null;
+  user: User | null;
 }
