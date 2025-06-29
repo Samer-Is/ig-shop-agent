@@ -1,4 +1,5 @@
-import { Bell, Search, User } from 'lucide-react';
+import { Bell, Search, User, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import {
@@ -11,8 +12,16 @@ import {
 } from '../ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Badge } from '../ui/badge';
+import { useAuth } from '../../contexts/AuthContext';
 
 export function Header() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
   return (
     <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
       <div className="flex items-center gap-4 flex-1">
@@ -53,8 +62,8 @@ export function Header() {
                 </AvatarFallback>
               </Avatar>
               <div className="text-left">
-                <p className="text-sm font-medium">Admin</p>
-                <p className="text-xs text-slate-500">admin@jordanfashion.com</p>
+                <p className="text-sm font-medium">{user?.name || 'User'}</p>
+                <p className="text-xs text-slate-500">@{user?.username || 'unknown'}</p>
               </div>
             </Button>
           </DropdownMenuTrigger>
@@ -65,7 +74,8 @@ export function Header() {
             <DropdownMenuItem>Team Management</DropdownMenuItem>
             <DropdownMenuItem>Billing</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-600">
+            <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
+              <LogOut className="w-4 h-4 mr-2" />
               Sign Out
             </DropdownMenuItem>
           </DropdownMenuContent>

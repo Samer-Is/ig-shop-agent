@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -19,10 +20,20 @@ import {
 
 export function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { login, isAuthenticated } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState('');
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      const from = location.state?.from?.pathname || '/';
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, location]);
 
   // Handle Instagram OAuth callback
   useEffect(() => {
@@ -52,15 +63,19 @@ export function Login() {
       );
 
       if (response.data?.success) {
-        // Store the session token
-        apiService.setAuthToken(response.data.session_token);
+        // Use authentication context to login
+        const userData = {
+          id: response.data.user.id,
+          username: response.data.user.username,
+          name: response.data.user.name,
+          tenant_id: response.data.tenant_id
+        };
         
-        // Store user info in localStorage for easy access
-        localStorage.setItem('ig_user', JSON.stringify(response.data.user));
-        localStorage.setItem('ig_tenant_id', response.data.tenant_id);
+        login(response.data.session_token, userData);
         
-        // Navigate to dashboard
-        navigate('/');
+        // Navigate to the page they came from or dashboard
+        const from = location.state?.from?.pathname || '/';
+        navigate(from, { replace: true });
       } else {
         setError(response.error || 'Authentication failed');
       }

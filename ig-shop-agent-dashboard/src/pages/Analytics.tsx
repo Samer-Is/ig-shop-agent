@@ -36,7 +36,7 @@ import {
   Target,
   Zap
 } from 'lucide-react';
-import { usageStats } from '../data/mockData';
+import { apiService } from '../services/api';
 
 export function Analytics() {
   // Mock data for charts

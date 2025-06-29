@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -35,15 +35,42 @@ import {
   Edit,
   Trash2,
   Eye,
-  Package
+  Package,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
-import { catalogItems } from '../data/mockData';
+import { apiService } from '../services/api';
 import { CatalogItem } from '../types';
 
 export function Catalog() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [products] = useState<CatalogItem[]>(catalogItems);
+  const [products, setProducts] = useState<CatalogItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load products from API
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const response = await apiService.getCatalog(100, 0, selectedCategory === 'all' ? undefined : selectedCategory, searchTerm);
+        
+        if (response.data) {
+          setProducts(response.data.items);
+        } else {
+          setError(response.error || 'Failed to load products');
+        }
+      } catch (err) {
+        setError('Failed to load products');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProducts();
+  }, [selectedCategory, searchTerm]);
 
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))];
 
@@ -59,6 +86,50 @@ export function Catalog() {
     if (quantity < 5) return { label: 'Low Stock', variant: 'secondary' as const };
     return { label: 'In Stock', variant: 'default' as const };
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Product Catalog</h1>
+            <p className="text-slate-500 mt-1">Loading products...</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <span className="ml-3 text-slate-600">Loading products...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Product Catalog</h1>
+            <p className="text-slate-500 mt-1">Manage your product inventory and pricing</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">Failed to Load Products</h3>
+              <p className="text-slate-500 mb-4">{error}</p>
+              <Button onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

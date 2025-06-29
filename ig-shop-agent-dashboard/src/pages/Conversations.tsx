@@ -18,7 +18,7 @@ import {
   DollarSign,
   Activity
 } from 'lucide-react';
-import { conversations } from '../data/mockData';
+import { apiService } from '../services/api';
 import { Conversation, ChatMessage } from '../types';
 
 export function Conversations() {

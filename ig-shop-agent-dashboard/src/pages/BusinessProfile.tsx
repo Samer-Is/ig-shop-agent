@@ -25,7 +25,7 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
-import { businessProfile } from '../data/mockData';
+import { apiService } from '../services/api';
 import { BusinessProfile as BusinessProfileType } from '../types';
 
 export function BusinessProfile() {

@@ -39,7 +39,7 @@ import {
   Zap,
   FileCheck
 } from 'lucide-react';
-import { kbDocuments } from '../data/mockData';
+import { apiService } from '../services/api';
 import { KBDocument } from '../types';
 
 export function KnowledgeBase() {
