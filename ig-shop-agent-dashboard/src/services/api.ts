@@ -1,5 +1,5 @@
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://igshop-api.azurewebsites.net'  // Azure Web App URL (updated)
+  ? 'https://igshop-dev-yjhtoi-api.azurewebsites.net'  // Python Flask Azure Web App
   : 'http://localhost:8000';  // Local Flask app
 
 // Import types from main types file

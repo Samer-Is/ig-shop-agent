@@ -1,0 +1,89 @@
+# Production Requirements for IG-Shop-Agent
+# 100% Complete Backend Dependencies
+
+# Core Framework
+Flask==3.0.0
+Flask-CORS==4.0.0
+Flask-JWT-Extended==4.6.0
+
+# Database & ORM
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+
+# Redis for caching and rate limiting
+redis==5.0.1
+flask-limiter==3.5.0
+
+# AI & Machine Learning
+openai==1.5.1
+azure-openai==1.0.0
+
+# HTTP Requests
+requests==2.31.0
+urllib3==2.1.0
+
+# Async Support
+aiohttp==3.9.1
+asyncio-throttle==1.0.2
+
+# Security & Authentication
+cryptography==41.0.8
+PyJWT==2.8.0
+werkzeug==3.0.1
+
+# Data Processing
+pandas==2.1.4
+numpy==1.24.4
+
+# Date/Time handling
+python-dateutil==2.8.2
+
+# Environment & Configuration
+python-dotenv==1.0.0
+
+# Logging & Monitoring
+azure-monitor-opentelemetry==1.2.0
+opencensus-ext-azure==1.1.13
+applicationinsights==0.11.10
+
+# File handling
+Pillow==10.1.0
+python-magic==0.4.27
+
+# Email support
+Flask-Mail==0.9.1
+
+# Testing (for production testing)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Production WSGI server
+gunicorn==21.2.0
+eventlet==0.33.3
+
+# Rate limiting and caching
+Flask-Caching==2.1.0
+
+# Input validation
+marshmallow==3.20.2
+flask-marshmallow==0.15.0
+
+# Background task processing
+celery==5.3.4
+
+# Health check utilities
+flask-healthz==1.0.1
+
+# Azure SDK
+azure-identity==1.15.0
+azure-keyvault-secrets==4.7.0
+azure-storage-blob==12.19.0
+
+# Development tools (for production debugging)
+ipython==8.18.1
+
+# JSON handling
+orjson==3.9.10
+
+# HTTP client with better performance  
+httpx==0.25.2 

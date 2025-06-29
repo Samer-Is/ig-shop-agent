@@ -619,9 +619,16 @@ def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    # For local development
+    # For Azure Web App deployment - handle different port environment variables
+    port = int(os.environ.get('PORT', os.environ.get('WEBSITES_PORT', 8000)))
+    
+    logger.info(f"Starting Flask application on port {port}")
+    logger.info(f"Debug mode: {settings.debug}")
+    logger.info(f"Environment: {settings.environment}")
+    
+    # For local development and Azure deployment
     app.run(
         host='0.0.0.0',
-        port=int(os.environ.get('PORT', 8000)),
+        port=port,
         debug=settings.debug
     ) 
