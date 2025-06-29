@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "https://red-island-0b863450f.2.azurestaticapps.net")
     
     # Database Configuration (PostgreSQL)
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/igshop")
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/igshop"
     DATABASE_HOST: str = os.getenv("DATABASE_HOST", "igshop-postgres.postgres.database.azure.com")
     DATABASE_PORT: int = int(os.getenv("DATABASE_PORT", "5432"))
     DATABASE_NAME: str = os.getenv("DATABASE_NAME", "igshop_db")
@@ -27,21 +27,21 @@ class Settings(BaseSettings):
     DATABASE_PASSWORD: Optional[str] = os.getenv("DATABASE_PASSWORD")
     
     # JWT Configuration
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production")
+    JWT_SECRET: str = "your-secret-key-here"  # Change in production
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 * 24 * 60  # 30 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     
-    # Instagram/Meta API Configuration
-    FACEBOOK_APP_ID: str = os.getenv("FACEBOOK_APP_ID", "1879578119651644")
-    FACEBOOK_APP_SECRET: str = os.getenv("FACEBOOK_APP_SECRET", "f79b3350f43751d6139e1b29a232cbf3")
-    META_GRAPH_API_URL: str = "https://graph.facebook.com/v18.0"
-    INSTAGRAM_OAUTH_URL: str = "https://api.instagram.com/oauth/authorize"
-    INSTAGRAM_TOKEN_URL: str = "https://api.instagram.com/oauth/access_token"
+    # Meta/Instagram OAuth Settings
+    META_APP_ID: str = "1879578119651644"
+    META_APP_SECRET: str = "f79b3350f43751d6139e1b29a232cbf3"
+    META_GRAPH_API_VERSION: str = "v18.0"
+    META_REDIRECT_URI: str = "https://red-island-0b863450f.2.azurestaticapps.net/auth/callback"
     
     # OpenAI Configuration
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "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")
-    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4")
-    OPENAI_MAX_TOKENS: int = int(os.getenv("OPENAI_MAX_TOKENS", "1000"))
+    OPENAI_API_KEY: str = "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"
+    OPENAI_API_VERSION: str = "2023-05-15"
+    OPENAI_DEPLOYMENT_NAME: str = "gpt-4"
+    OPENAI_EMBEDDING_DEPLOYMENT: str = "text-embedding-ada-002"
     
     # Azure OpenAI Configuration (for production)
     AZURE_OPENAI_ENDPOINT: Optional[str] = os.getenv("AZURE_OPENAI_ENDPOINT")
@@ -76,12 +76,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_WINDOW: int = int(os.getenv("RATE_LIMIT_WINDOW", "3600"))  # 1 hour
     
     # CORS Configuration
-    CORS_ORIGINS: list = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://red-island-0b863450f.2.azurestaticapps.net",
-        "https://igshop-api.azurewebsites.net"
-    ]
+    CORS_ORIGINS: list = ["*"]  # Update with actual frontend domain in production
     
     # Logging Configuration
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")

@@ -3,20 +3,17 @@
  * IG-Shop-Agent: Real backend integration
  */
 
-// Use the production backend URL
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://igshop-api.azurewebsites.net'
-  : 'http://localhost:8000';
+// Use environment variable or fallback for API URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://igshop-api.azurewebsites.net';
 
 // Import types from main types file
 import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
 import axios, { AxiosInstance } from 'axios';
 
 // API Response types matching Flask backend
-interface ApiResponse<T> {
+interface ApiResponse<T = any> {
   data?: T;
   error?: string;
-  status: number;
 }
 
 // Authentication interfaces
@@ -154,6 +151,7 @@ export class ApiService {
       headers: {
         'Content-Type': 'application/json',
       },
+      withCredentials: true // Important for session cookies
     });
 
     // Add auth token to requests if available
@@ -171,9 +169,9 @@ export class ApiService {
     try {
       const response = await this.api.get('/auth/instagram/login');
       return { data: response.data };
-    } catch (error) {
-      console.error('Failed to get Instagram auth URL:', error);
-      return { error: 'Failed to get Instagram authorization URL' };
+    } catch (error: any) {
+      console.error('Failed to get Instagram auth URL:', error.response?.data || error);
+      return { error: error.response?.data?.detail || 'Failed to get Instagram authorization URL' };
     }
   }
 
@@ -181,9 +179,9 @@ export class ApiService {
     try {
       const response = await this.api.post('/auth/instagram/callback', { code, state });
       return { data: response.data };
-    } catch (error) {
-      console.error('Instagram callback error:', error);
-      return { error: 'Failed to complete Instagram authentication' };
+    } catch (error: any) {
+      console.error('Instagram callback error:', error.response?.data || error);
+      return { error: error.response?.data?.detail || 'Failed to complete Instagram authentication' };
     }
   }
 
@@ -192,8 +190,8 @@ export class ApiService {
     try {
       const response = await this.api.get('/health');
       return { data: response.data };
-    } catch (error) {
-      return { error: 'API health check failed' };
+    } catch (error: any) {
+      return { error: error.response?.data?.detail || 'API health check failed' };
     }
   }
 
