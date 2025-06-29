@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'backend/**'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
@@ -45,7 +46,7 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
         
-    - name: Configure Azure Web App Runtime & Startup
+    - name: Configure Azure Web App for Python Flask
       run: |
         echo "🔧 Configuring Azure Web App for Python Flask backend..."
         
@@ -61,42 +62,45 @@ jobs:
           --name igshop-dev-yjhtoi-api \
           --startup-file "gunicorn --bind=0.0.0.0 --timeout 600 production_app:app"
         
-        # Verify configuration
-        echo "✅ Runtime configured:"
-        az webapp config show \
-          --resource-group igshop-dev-rg-v2 \
-          --name igshop-dev-yjhtoi-api \
-          --query "linuxFxVersion"
-        
-        # Set environment variables
+        # Set ALL environment variables with LIVE credentials
         az webapp config appsettings set \
           --resource-group igshop-dev-rg-v2 \
           --name igshop-dev-yjhtoi-api \
           --settings \
-            META_APP_ID="${{ secrets.META_APP_ID }}" \
-            META_APP_SECRET="${{ secrets.META_APP_SECRET }}" \
-            OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
-            JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" \
+            META_APP_ID="1879578119651644" \
+            META_APP_SECRET="f79b3350f43751d6139e1b29a232cbf3" \
+            OPENAI_API_KEY="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" \
+            JWT_SECRET_KEY="production-jwt-secret-2024" \
             META_REDIRECT_URI="https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/callback" \
-            SCM_DO_BUILD_DURING_DEPLOYMENT=true
+            FLASK_APP="production_app.py" \
+            FLASK_ENV="production" \
+            SCM_DO_BUILD_DURING_DEPLOYMENT="true" \
+            ENABLE_ORYX_BUILD="true"
         
-        # Force restart to apply configuration
-        echo "🔄 Restarting app to apply configuration..."
-        az webapp restart \
+        # Verify configuration was applied
+        echo "✅ Configuration applied:"
+        az webapp config show \
           --resource-group igshop-dev-rg-v2 \
-          --name igshop-dev-yjhtoi-api
+          --name igshop-dev-yjhtoi-api \
+          --query "{linuxFxVersion: linuxFxVersion, appCommandLine: appCommandLine}"
         
-    - name: Create deployment package
+    - name: Create clean deployment package
       run: |
         cd backend
-        # Clean up unnecessary files
-        rm -rf __pycache__
-        rm -rf .pytest_cache
+        
+        # Remove any build artifacts and cache
+        rm -rf __pycache__ .pytest_cache *.pyc
+        find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+        
+        # Remove test files
         rm -f test_*.py
         
-        echo "✅ Production deployment package prepared"
-        echo "Files to deploy:"
-        ls -la production_app.py requirements.txt
+        # Ensure only production files
+        echo "✅ Files to deploy:"
+        ls -la
+        
+        echo "✅ Contents of production_app.py:"
+        head -10 production_app.py
         
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
@@ -105,13 +109,31 @@ jobs:
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: './backend'
 
-    - name: Test deployment
+    - name: Post-deployment configuration
       run: |
-        echo "Deployment completed!"
-        echo "Backend available at: https://igshop-dev-yjhtoi-api.azurewebsites.net"
+        # Force restart to apply all settings
+        echo "🔄 Forcing restart to apply all configuration..."
+        az webapp restart \
+          --resource-group igshop-dev-rg-v2 \
+          --name igshop-dev-yjhtoi-api
         
-        # Wait for the app to start
-        sleep 60
+        # Wait for restart
+        echo "⏳ Waiting 30 seconds for restart..."
+        sleep 30
+
+    - name: Verify deployment
+      run: |
+        echo "🔍 Testing deployment..."
+        echo "Backend URL: https://igshop-dev-yjhtoi-api.azurewebsites.net"
         
-        # Test the health endpoint
-        curl -f https://igshop-dev-yjhtoi-api.azurewebsites.net/health && echo "✅ Health check passed!" || echo "❌ Health check failed" 
+        # Test root endpoint
+        echo "Testing root endpoint..."
+        curl -f https://igshop-dev-yjhtoi-api.azurewebsites.net/ || echo "Root endpoint failed"
+        
+        # Test health endpoint  
+        echo "Testing health endpoint..."
+        curl -f https://igshop-dev-yjhtoi-api.azurewebsites.net/health || echo "Health endpoint failed"
+        
+        echo "✅ Deployment completed!"
+        echo "🌐 Frontend: https://red-island-0b863450f.2.azurestaticapps.net"
+        echo "🔗 Backend: https://igshop-dev-yjhtoi-api.azurewebsites.net" 
