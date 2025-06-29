@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'ig-shop-agent-dashboard/**'
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
