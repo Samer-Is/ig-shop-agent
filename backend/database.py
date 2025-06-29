@@ -220,6 +220,53 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to initialize database schema: {e}")
             return False
+    
+    async def store_instagram_tokens(self, instagram_account_id: str, access_token: str, account_data: Dict[str, Any]) -> None:
+        """Store Instagram tokens and account info in database"""
+        try:
+            async with self.get_connection() as conn:
+                # Start transaction
+                async with conn.transaction():
+                    # Check if user exists
+                    existing_user = await conn.fetchrow(
+                        "SELECT id FROM users WHERE instagram_user_id = $1",
+                        instagram_account_id
+                    )
+                    
+                    if existing_user:
+                        # Update existing user
+                        await conn.execute(
+                            """
+                            UPDATE users 
+                            SET instagram_access_token = $1,
+                                instagram_connected = TRUE,
+                                updated_at = NOW()
+                            WHERE instagram_user_id = $2
+                            """,
+                            access_token,
+                            instagram_account_id
+                        )
+                    else:
+                        # Create new user
+                        await conn.execute(
+                            """
+                            INSERT INTO users (
+                                instagram_handle,
+                                instagram_user_id,
+                                instagram_access_token,
+                                instagram_connected
+                            ) VALUES ($1, $2, $3, TRUE)
+                            """,
+                            account_data['username'],
+                            instagram_account_id,
+                            access_token
+                        )
+                        
+                    logger.info(f"Successfully stored Instagram tokens for account {instagram_account_id}")
+                    
+        except Exception as e:
+            logger.error(f"Failed to store Instagram tokens: {e}")
+            raise
 
 async def get_db_connection() -> DatabaseService:
     """Get the global database service instance"""
