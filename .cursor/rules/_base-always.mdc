@@ -1,0 +1,24 @@
+---
+description: Universal style + hygiene for every AI call
+alwaysApply: true
+---
+
+# Style
+- 2-space indent, single quotes, no trailing semicolons
+- Strict typing (`"strict": true`, `noImplicitAny`, `mypy --strict`)
+- Prefer pure functions; classes only when stateful objects are unavoidable
+
+# Comments & Docs
+- Every public function/class must include a docstring or JSDoc with:
+  - Purpose
+  - Parameters & types
+  - One usage example
+
+# File-size rule
+- Hard limit 400 LOC per file (Cursor’s 500-line guidance minus headroom)  
+
+# Verification checklist (AI MUST confirm before saying “done”)
+1. Lint passes without `--fix`
+2. No `console.log` / `print` / `TODO`
+3. New code covered by tests or test stubs
+4. No secrets committed

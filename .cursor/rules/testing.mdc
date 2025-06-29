@@ -1,0 +1,21 @@
+---
+description: Testing conventions (language-agnostic)
+alwaysApply: false
+globs: ["**/tests/**", "**/__tests__/**"]
+---
+
+# Test philosophy
+- Each new public function => one unit test minimum.
+- Tests must be deterministic; mock flaky IO & network calls.
+
+# Python
+- Use `pytest`, arrange-act-assert layout, fixtures in `conftest.py`.
+
+# JS/TS
+- Use `vitest` or `jest`; follow `describe / it / expect` pattern.
+
+# Coverage gate
+- Project-wide coverage ≥ 80 %; block merge if lower.
+
+# Self-audit
+- AI should suggest test skeletons when adding new code in `src/`.

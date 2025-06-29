@@ -83,6 +83,14 @@ interface Order {
 
 // Analytics interfaces
 interface Analytics {
+  // Flat properties expected by frontend
+  total_orders: number;
+  pending_orders: number;
+  confirmed_orders: number;
+  total_products: number;
+  total_revenue: number;
+  
+  // Nested structures for additional data
   orders: {
     total: number;
     revenue: number;

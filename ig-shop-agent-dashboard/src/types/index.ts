@@ -13,6 +13,8 @@ export interface User {
   tenant_id?: string;
   email: string;
   business_name?: string;
+  username?: string;     // Required by Header component
+  name?: string;         // Required by Header component
   role?: 'admin' | 'manager' | 'agent';
   last_login?: string;
   created_at?: string;
