@@ -15,7 +15,9 @@ import {
   ArrowRight,
   CheckCircle,
   AlertCircle,
-  Loader2
+  Loader2,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export function Login() {
@@ -25,6 +27,12 @@ export function Login() {
   const { login, isAuthenticated } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  
+  // Form state
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [businessName, setBusinessName] = useState('');
 
   // Redirect if already authenticated
@@ -38,7 +46,6 @@ export function Login() {
   // Handle Instagram OAuth callback
   useEffect(() => {
     const code = searchParams.get('code');
-    const state = searchParams.get('state');
     const error = searchParams.get('error');
 
     if (error) {
@@ -46,65 +53,80 @@ export function Login() {
       return;
     }
 
-    if (code && state) {
-      handleInstagramCallback(code, state);
+    if (code) {
+      // Instagram callback handled by backend automatically
+      // Just show success message
+      setError(null);
+      // Redirect to dashboard if user is logged in
+      if (isAuthenticated) {
+        navigate('/dashboard');
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, isAuthenticated, navigate]);
 
-  const handleInstagramCallback = async (code: string, state: string) => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await apiService.handleInstagramCallback(
-        code, 
-        state, 
-        `${window.location.origin}/login`
-      );
+      const response = await apiService.login({ email, password });
 
-      if (response.data?.success) {
+      if (response.data?.token) {
         // Use authentication context to login
         const userData = {
           id: response.data.user.id,
-          username: response.data.user.username,
-          name: response.data.user.name,
-          tenant_id: response.data.tenant_id
+          email: response.data.user.email,
+          business_name: response.data.user.business_name,
+          instagram_connected: response.data.user.instagram_connected
         };
         
-        login(response.data.session_token, userData);
+        login(response.data.token, userData);
         
         // Navigate to the page they came from or dashboard
-        const from = location.state?.from?.pathname || '/';
+        const from = location.state?.from?.pathname || '/dashboard';
         navigate(from, { replace: true });
       } else {
-        setError(response.error || 'Authentication failed');
+        setError(response.error || 'Login failed');
       }
     } catch (err) {
-      setError('Network error during authentication');
+      setError('Network error during login');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleInstagramLogin = async () => {
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await apiService.getInstagramAuthUrl(
-        businessName, 
-        `${window.location.origin}/login`
-      );
+      const response = await apiService.register({ 
+        email, 
+        password, 
+        business_name: businessName 
+      });
 
-      if (response.data?.auth_url) {
-        // Redirect to Instagram OAuth
-        window.location.href = response.data.auth_url;
+      if (response.data?.token) {
+        // Use authentication context to login
+        const userData = {
+          id: response.data.user.id,
+          email: response.data.user.email,
+          business_name: response.data.user.business_name,
+          instagram_connected: false
+        };
+        
+        login(response.data.token, userData);
+        
+        // Navigate to dashboard
+        navigate('/dashboard', { replace: true });
       } else {
-        setError(response.error || 'Failed to generate Instagram auth URL');
-        setIsLoading(false);
+        setError(response.error || 'Registration failed');
       }
     } catch (err) {
-      setError('Network error. Please try again.');
+      setError('Network error during registration');
+    } finally {
       setIsLoading(false);
     }
   };
@@ -168,7 +190,7 @@ export function Login() {
           </div>
         </div>
 
-        {/* Right Side - Login Form */}
+        {/* Right Side - Login/Register Form */}
         <div className="w-full max-w-md mx-auto">
           <Card className="shadow-xl border-0">
             <CardHeader className="space-y-1 pb-6">
@@ -183,9 +205,14 @@ export function Login() {
                   </div>
                 </div>
               </div>
-              <CardTitle className="text-2xl font-bold text-center">Connect Your Instagram</CardTitle>
+              <CardTitle className="text-2xl font-bold text-center">
+                {isRegistering ? 'Create Account' : 'Welcome Back'}
+              </CardTitle>
               <p className="text-slate-600 text-center">
-                Link your Instagram Business account to get started
+                {isRegistering 
+                  ? 'Start automating your Instagram business' 
+                  : 'Sign in to your dashboard'
+                }
               </p>
             </CardHeader>
             <CardContent>
@@ -198,76 +225,120 @@ export function Login() {
                 </Alert>
               )}
 
-              <div className="space-y-6">
+              <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
+                {isRegistering && (
+                  <div className="space-y-2">
+                    <Label htmlFor="businessName">Business Name</Label>
+                    <Input
+                      id="businessName"
+                      type="text"
+                      placeholder="e.g., Jordan Fashion Store"
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      disabled={isLoading}
+                    />
+                  </div>
+                )}
+                
                 <div className="space-y-2">
-                  <Label htmlFor="businessName">Business Name (Optional)</Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
-                    id="businessName"
-                    type="text"
-                    placeholder="e.g., Jordan Fashion Store"
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
+                    id="email"
+                    type="email"
+                    placeholder="your@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     disabled={isLoading}
+                    required
                   />
-                  <p className="text-xs text-slate-500">
-                    This helps us identify your store during setup
-                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={isLoading}
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4 text-slate-400" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-slate-400" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
                 
                 <Button 
-                  onClick={handleInstagramLogin}
-                  className="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700"
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
                   disabled={isLoading}
                   size="lg"
                 >
                   {isLoading ? (
                     <div className="flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Connecting to Instagram...
+                      {isRegistering ? 'Creating Account...' : 'Signing In...'}
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <Instagram className="w-5 h-5" />
-                      Connect with Instagram
+                      {isRegistering ? 'Create Account' : 'Sign In'}
                       <ArrowRight className="w-4 h-4" />
                     </div>
                   )}
                 </Button>
+              </form>
 
-                <div className="text-center">
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-slate-200" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-white px-2 text-slate-500">How it works</span>
-                    </div>
-                  </div>
-                </div>
+              <div className="mt-6 text-center">
+                <Button 
+                  variant="link" 
+                  className="px-0 text-sm font-medium"
+                  onClick={() => setIsRegistering(!isRegistering)}
+                  disabled={isLoading}
+                >
+                  {isRegistering 
+                    ? 'Already have an account? Sign in' 
+                    : "Don't have an account? Sign up"
+                  }
+                </Button>
+              </div>
 
-                <div className="space-y-3 text-sm text-slate-600">
-                  <div className="flex items-start gap-2">
-                    <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold mt-0.5">1</div>
-                    <p>Connect your Instagram Business account</p>
+              <div className="mt-6">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-slate-200" />
                   </div>
-                  <div className="flex items-start gap-2">
-                    <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold mt-0.5">2</div>
-                    <p>Upload your product catalog and business info</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold mt-0.5">3</div>
-                    <p>Start receiving AI-powered Instagram DM responses</p>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-white px-2 text-slate-500">How it works</span>
                   </div>
                 </div>
               </div>
-              
-              <div className="mt-6 pt-6 border-t border-slate-200">
-                <p className="text-center text-sm text-slate-600">
-                  Don't have an account?{' '}
-                  <Button variant="link" className="px-0 text-sm font-medium">
-                    Contact sales
-                  </Button>
-                </p>
+
+              <div className="space-y-3 text-sm text-slate-600 mt-4">
+                <div className="flex items-start gap-2">
+                  <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold mt-0.5">1</div>
+                  <p>Sign up for your account</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold mt-0.5">2</div>
+                  <p>Connect your Instagram Business account</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold mt-0.5">3</div>
+                  <p>Start receiving AI-powered DM responses</p>
+                </div>
               </div>
             </CardContent>
           </Card>

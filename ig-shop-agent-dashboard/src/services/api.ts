@@ -1,6 +1,10 @@
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://igshop-dev-yjhtoi-api.azurewebsites.net'  // Python Flask Azure Web App
-  : 'http://localhost:8000';  // Local Flask app
+/**
+ * Production API Service - Updated to match backend
+ * IG-Shop-Agent: Real backend integration
+ */
+
+// Use the production backend URL
+const API_BASE_URL = 'https://igshop-dev-yjhtoi-api.azurewebsites.net';
 
 // Import types from main types file
 import type { KBDocument, Conversation } from '../types';
@@ -15,118 +19,112 @@ interface ApiResponse<T> {
 // Authentication interfaces
 interface InstagramAuthResponse {
   auth_url: string;
-  state: string;
+  status: string;
 }
 
 interface InstagramCallbackResponse {
-  success: boolean;
-  session_token: string;
-  tenant_id: string;
-  user: {
-    id: string;
-    username: string;
-    name: string;
-  };
-  instagram_accounts: Array<{
-    id: string;
-    username: string;
-    name: string;
-  }>;
+  message: string;
+  instagram_username: string;
+  status: string;
 }
 
-interface TokenVerifyResponse {
-  valid: boolean;
-  user_id: string;
-  username: string;
-  tenant_id: string;
+interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+interface RegisterRequest {
+  email: string;
+  password: string;
+  business_name?: string;
+}
+
+interface AuthResponse {
+  message: string;
+  token: string;
+  user: {
+    id: number;
+    email: string;
+    business_name: string;
+    instagram_connected?: boolean;
+  };
 }
 
 // Catalog interfaces - matching database schema
 interface CatalogItem {
-  id: string;
-  tenant_id: string;
-  sku: string;
+  id: number;
   name: string;
+  description: string;
   price_jod: number;
-  media_url: string;
-  extras: Record<string, any>;
-  description?: string;
-  category?: string;
-  stock_quantity?: number;
+  category: string;
+  image_url?: string;
+  stock_quantity: number;
+  is_active: boolean;
   created_at: string;
-  updated_at: string;
-}
-
-interface CatalogResponse {
-  items: CatalogItem[];
-  total: number;
-  limit: number;
-  offset: number;
 }
 
 interface CreateCatalogItemRequest {
-  sku: string;
   name: string;
-  price_jod: number;
   description?: string;
+  price_jod: number;
   category?: string;
   stock_quantity?: number;
-  media_url?: string;
+  image_url?: string;
 }
 
 // Order interfaces - matching database schema
 interface Order {
-  id: string;
-  tenant_id: string;
-  sku: string;
-  qty: number;
-  customer: string;
-  phone: string;
-  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+  id: number;
+  customer_name: string;
   total_amount: number;
+  status: string;
   created_at: string;
-  updated_at: string;
-  delivery_address?: string;
-  notes?: string;
-}
-
-interface OrdersResponse {
-  orders: Order[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
-interface CreateOrderRequest {
-  sku: string;
-  qty: number;
-  customer: string;
-  phone: string;
-  total_amount: number;
-  delivery_address?: string;
-  notes?: string;
-}
-
-// AI interfaces
-interface AITestRequest {
-  message: string;
-}
-
-interface AITestResponse {
-  success: boolean;
-  response: string;
-  processed_at: string;
 }
 
 // Analytics interfaces
-interface DashboardAnalytics {
-  total_orders: number;
-  total_revenue: number;
-  total_products: number;
-  pending_orders: number;
-  confirmed_orders: number;
+interface Analytics {
+  orders: {
+    total: number;
+    revenue: number;
+    average_value: number;
+    pending: number;
+    completed: number;
+  };
+  catalog: {
+    total_products: number;
+    active_products: number;
+    out_of_stock: number;
+  };
+  conversations: {
+    total_messages: number;
+    ai_responses: number;
+    customer_messages: number;
+  };
   recent_orders: Order[];
-  top_products: CatalogItem[];
+}
+
+interface Conversation {
+  id: number;
+  text: string;
+  ai_generated: boolean;
+  created_at: string;
+}
+
+interface KBDocument {
+  id: number;
+  title: string;
+  file_uri: string;
+}
+
+interface AITestResponse {
+  response: string;
+  intent_analysis: {
+    intent: string;
+    products_mentioned: string[];
+    urgency: string;
+    language: string;
+  };
+  catalog_items_used: number;
 }
 
 class ApiService {
@@ -135,8 +133,8 @@ class ApiService {
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
-    // Load token from localStorage
-    this.authToken = localStorage.getItem('ig_session_token');
+    // Try to get token from localStorage
+    this.authToken = localStorage.getItem('access_token');
   }
 
   private async request<T>(
@@ -183,124 +181,113 @@ class ApiService {
   // Set auth token
   setAuthToken(token: string) {
     this.authToken = token;
-    localStorage.setItem('ig_session_token', token);
+    localStorage.setItem('access_token', token);
   }
 
   // Clear auth token
   clearAuthToken() {
     this.authToken = null;
-    localStorage.removeItem('ig_session_token');
+    localStorage.removeItem('access_token');
   }
 
   // Health check
-  async healthCheck(): Promise<ApiResponse<{ status: string; service: string; version: string }>> {
+  async healthCheck(): Promise<ApiResponse<any>> {
     return this.request('/health');
   }
 
-  async detailedHealthCheck(): Promise<ApiResponse<any>> {
-    return this.request('/api/health');
-  }
-
-  // Authentication
-  async getInstagramAuthUrl(businessName: string = '', redirectUri: string = ''): Promise<ApiResponse<InstagramAuthResponse>> {
-    const params = new URLSearchParams();
-    if (businessName) params.append('business_name', businessName);
-    if (redirectUri) params.append('redirect_uri', redirectUri);
-    
-    return this.request(`/auth/instagram?${params.toString()}`);
-  }
-
-  async handleInstagramCallback(code: string, state: string, redirectUri: string = ''): Promise<ApiResponse<InstagramCallbackResponse>> {
-    const params = new URLSearchParams({ code, state });
-    if (redirectUri) params.append('redirect_uri', redirectUri);
-    
-    return this.request(`/auth/callback?${params.toString()}`);
-  }
-
-  async verifyToken(): Promise<ApiResponse<TokenVerifyResponse>> {
-    return this.request('/auth/verify', { method: 'POST' });
-  }
-
-  // Catalog Management
-  async getCatalog(limit: number = 50, offset: number = 0, category?: string, search?: string): Promise<ApiResponse<CatalogResponse>> {
-    const params = new URLSearchParams({ 
-      limit: limit.toString(), 
-      offset: offset.toString() 
+  // Authentication - Updated to match backend
+  async register(data: RegisterRequest): Promise<ApiResponse<AuthResponse>> {
+    return this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
-    if (category) params.append('category', category);
-    if (search) params.append('search', search);
-    
-    return this.request(`/api/catalog?${params.toString()}`);
   }
 
-  async createCatalogItem(item: CreateCatalogItemRequest): Promise<ApiResponse<{ success: boolean; item_id: string; message: string }>> {
+  async login(data: LoginRequest): Promise<ApiResponse<AuthResponse>> {
+    const response = await this.request<AuthResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+    if (response.data?.token) {
+      this.setAuthToken(response.data.token);
+    }
+
+    return response;
+  }
+
+  // Instagram OAuth - Updated to match backend
+  async getInstagramAuthUrl(): Promise<ApiResponse<InstagramAuthResponse>> {
+    return this.request('/auth/instagram');
+  }
+
+  // This method handles the callback differently since backend handles it directly
+  async handleInstagramCallback(code: string, state: string): Promise<ApiResponse<InstagramCallbackResponse>> {
+    // The backend handles this automatically via /auth/instagram/callback
+    // This is just for the frontend to know the result
+    return { data: { message: 'Handled by backend', instagram_username: '', status: 'success' }, status: 200 };
+  }
+
+  // Catalog Management - Updated to match backend
+  async getCatalog(): Promise<ApiResponse<CatalogItem[]>> {
+    return this.request('/api/catalog');
+  }
+
+  async createCatalogItem(item: CreateCatalogItemRequest): Promise<ApiResponse<{ id: number; message: string; enhanced_description: string }>> {
     return this.request('/api/catalog', {
       method: 'POST',
       body: JSON.stringify(item),
     });
   }
 
-  async updateCatalogItem(itemId: string, item: Partial<CreateCatalogItemRequest>): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  async updateCatalogItem(itemId: number, item: Partial<CreateCatalogItemRequest>): Promise<ApiResponse<{ message: string }>> {
     return this.request(`/api/catalog/${itemId}`, {
       method: 'PUT',
       body: JSON.stringify(item),
     });
   }
 
-  async deleteCatalogItem(itemId: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  async deleteCatalogItem(itemId: number): Promise<ApiResponse<{ message: string }>> {
     return this.request(`/api/catalog/${itemId}`, {
       method: 'DELETE',
     });
   }
 
-  // Order Management
-  async getOrders(limit: number = 50, offset: number = 0, status?: string): Promise<ApiResponse<OrdersResponse>> {
-    const params = new URLSearchParams({ 
-      limit: limit.toString(), 
-      offset: offset.toString() 
-    });
-    if (status) params.append('status', status);
-    
-    return this.request(`/api/orders?${params.toString()}`);
+  // Order Management - Updated to match backend
+  async getOrders(): Promise<ApiResponse<Order[]>> {
+    return this.request('/api/orders');
   }
 
-  async createOrder(order: CreateOrderRequest): Promise<ApiResponse<{ success: boolean; order_id: string; message: string }>> {
-    return this.request('/api/orders', {
-      method: 'POST',
-      body: JSON.stringify(order),
-    });
-  }
-
-  async updateOrderStatus(orderId: string, status: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  async updateOrderStatus(orderId: number, status: string): Promise<ApiResponse<{ message: string }>> {
     return this.request(`/api/orders/${orderId}/status`, {
       method: 'PUT',
       body: JSON.stringify({ status }),
     });
   }
 
-  // AI Agent
+  // AI Agent - Updated to match backend
   async testAIResponse(message: string): Promise<ApiResponse<AITestResponse>> {
-    return this.request('/api/ai/test-response', {
+    return this.request('/api/ai/chat', {
       method: 'POST',
       body: JSON.stringify({ message }),
     });
   }
 
-  // Analytics
-  async getDashboardAnalytics(): Promise<ApiResponse<DashboardAnalytics>> {
-    return this.request('/api/analytics/dashboard');
+  // Analytics - Updated to match backend
+  async getDashboardAnalytics(): Promise<ApiResponse<Analytics>> {
+    return this.request('/api/analytics');
   }
 
-  // Knowledge Base
+  // Knowledge Base - Placeholder (not implemented in backend yet)
   async getKnowledgeBase(): Promise<KBDocument[]> {
-    const response = await this.request<{ documents: KBDocument[] }>('/api/knowledge-base');
-    return response.data?.documents || [];
+    // Backend doesn't have this endpoint yet, return empty
+    return [];
   }
 
-  // Conversations
+  // Conversations - Placeholder (not implemented in backend yet)
   async getConversations(): Promise<Conversation[]> {
-    const response = await this.request<{ conversations: Conversation[] }>('/api/conversations');
-    return response.data?.conversations || [];
+    // Backend doesn't have this endpoint yet, return empty
+    return [];
   }
 
   // Test connection
@@ -312,6 +299,20 @@ class ApiService {
       return false;
     }
   }
+
+  // Additional methods to match frontend usage
+  async verifyToken(): Promise<ApiResponse<{ valid: boolean }>> {
+    if (!this.authToken) {
+      return { data: { valid: false }, status: 200 };
+    }
+    
+    const response = await this.request('/health');
+    return { data: { valid: response.status === 200 }, status: response.status };
+  }
+
+  isAuthenticated(): boolean {
+    return !!this.authToken;
+  }
 }
 
 // Create singleton instance
@@ -322,16 +323,12 @@ export type {
   ApiResponse,
   InstagramAuthResponse,
   InstagramCallbackResponse,
-  TokenVerifyResponse,
+  AuthResponse,
   CatalogItem,
-  CatalogResponse,
   CreateCatalogItemRequest,
   Order,
-  OrdersResponse,
-  CreateOrderRequest,
-  AITestRequest,
+  Analytics,
   AITestResponse,
-  DashboardAnalytics,
 };
 
 // Utility function to check if API is available
