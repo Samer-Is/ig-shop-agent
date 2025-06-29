@@ -1,0 +1,56 @@
+﻿# Flask Web Application
+flask==3.1.1
+flask-cors==6.0.1
+
+# Azure Functions Core Dependencies (optional)
+azure-functions>=1.18.0
+azure-functions-worker>=1.0.0
+
+# Database Dependencies
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
+
+# HTTP Client for API calls
+requests>=2.31.0
+httpx>=0.25.0
+
+# Environment and Configuration
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Security and Authentication
+cryptography>=41.0.0
+PyJWT>=2.8.0
+passlib>=1.7.4
+
+# OpenAI and AI Integration
+openai>=1.6.0
+tiktoken>=0.5.2
+
+# Instagram/Meta API
+facebook-sdk>=3.1.0
+
+# Vector Search and Embeddings
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Data Processing
+pandas>=2.0.0
+
+# Utilities
+python-multipart>=0.0.6
+python-dateutil>=2.8.2
+
+# Development and Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Azure Services
+azure-identity>=1.15.0
+azure-keyvault-secrets>=4.7.0
+azure-storage-blob>=12.19.0
+
+# FastAPI for local development
+fastapi>=0.104.0
+uvicorn>=0.24.0
