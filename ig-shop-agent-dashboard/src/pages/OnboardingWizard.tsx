@@ -8,7 +8,7 @@ import { Badge } from '../components/ui/badge';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Progress } from '../components/ui/progress';
 import { CheckCircle, Instagram, Upload, FileText, Settings, ArrowRight, AlertCircle } from 'lucide-react';
-import { apiService } from '../services/apiService';
+import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface OnboardingStep {
