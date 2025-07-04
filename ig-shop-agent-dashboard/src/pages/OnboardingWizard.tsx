@@ -9,8 +9,7 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import { Progress } from '../components/ui/progress';
 import { CheckCircle, Instagram, Upload, FileText, Settings, ArrowRight, AlertCircle } from 'lucide-react';
 import { apiService } from '../services/apiService';
-import { updateUser } from '../contexts/UserContext';
-import { user } from '../contexts/UserContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface OnboardingStep {
   id: string;
@@ -32,6 +31,7 @@ interface BusinessProfile {
 }
 
 export function OnboardingWizard() {
+  const { user, login } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,19 +136,25 @@ export function OnboardingWizard() {
             }
 
             // Update user context with Instagram data
-            updateUser({
-              ...user,
-              instagram_connected: true,
-              instagram_handle: authResponse.data.instagram_handle
-            });
+            if (user) {
+              const updatedUser = {
+                ...user,
+                instagram_connected: true,
+                instagram_handle: authResponse.data.instagram_handle
+              };
+              login(localStorage.getItem('ig_session_token') || '', updatedUser);
+            }
 
             // Clear state
             localStorage.removeItem('oauth_state');
             
             // Close popup and proceed
             popup.close();
+            setInstagramConnected(true);
             setLoading(false);
-            onNext();
+            if (currentStep === 0) {
+              setCurrentStep(1);
+            }
 
           } catch (error) {
             console.error('Failed to complete Instagram authentication:', error);
@@ -169,7 +175,7 @@ export function OnboardingWizard() {
         if (popup.closed) {
           clearInterval(checkClosed);
           window.removeEventListener('message', handleMessage);
-          if (!user.instagram_connected) {
+          if (!instagramConnected) {
             setError('Instagram connection cancelled');
             setLoading(false);
           }
