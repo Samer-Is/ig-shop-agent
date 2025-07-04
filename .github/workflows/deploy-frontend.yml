@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - production-deployment
     paths:
       - 'ig-shop-agent-dashboard/**'
       - '.github/workflows/deploy-frontend.yml'
@@ -11,6 +12,7 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
+      - production-deployment
     paths:
       - 'ig-shop-agent-dashboard/**'
   workflow_dispatch:
@@ -70,9 +72,9 @@ jobs:
         run: |
           cd ig-shop-agent-dashboard
           
-          # Set backend API URL based on environment
+          # Set backend API URL based on environment - use correct Azure web app names
           if [ "${{ env.ENVIRONMENT }}" = "dev" ]; then
-            echo "VITE_API_BASE_URL=https://igshop-dev-api.azurewebsites.net" > .env.production
+            echo "VITE_API_BASE_URL=https://igshop-dev-yjhtoi-api.azurewebsites.net" > .env.production
           elif [ "${{ env.ENVIRONMENT }}" = "staging" ]; then
             echo "VITE_API_BASE_URL=https://igshop-staging-api.azurewebsites.net" > .env.production
           else
