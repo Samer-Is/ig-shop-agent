@@ -54,13 +54,24 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    # Check if Instagram OAuth is configured
+    meta_app_id = os.environ.get("META_APP_ID")
+    meta_app_secret = os.environ.get("META_APP_SECRET")
+    
+    if meta_app_id and meta_app_secret:
+        instagram_oauth_status = "configured"
+        oauth_message = f"Instagram OAuth configured with App ID: {meta_app_id[:8]}..."
+    else:
+        instagram_oauth_status = "not_configured"
+        oauth_message = "Instagram OAuth not configured - please set META_APP_ID and META_APP_SECRET"
+    
     return {
         "status": "healthy",
         "service": "ig-shop-agent-backend",
         "version": "1.0.0",
         "environment": os.environ.get("ENVIRONMENT", "production"),
-        "instagram_oauth": "not_configured",
-        "message": "Basic service operational. Instagram OAuth not configured - please set META_APP_ID and META_APP_SECRET"
+        "instagram_oauth": instagram_oauth_status,
+        "message": f"Basic service operational. {oauth_message}"
     }
 
 # Debug endpoint
@@ -109,14 +120,61 @@ async def debug_filesystem():
             }
         }
 
-# Instagram OAuth placeholder endpoints
+# Instagram OAuth endpoints
 @app.get("/auth/instagram/login")
 async def instagram_login():
-    """Instagram OAuth login endpoint (placeholder)"""
+    """Instagram OAuth login endpoint"""
+    meta_app_id = os.environ.get("META_APP_ID")
+    meta_app_secret = os.environ.get("META_APP_SECRET")
+    
+    if not meta_app_id or not meta_app_secret:
+        return {
+            "error": "Instagram OAuth not configured",
+            "message": "Please configure META_APP_ID and META_APP_SECRET environment variables",
+            "status": "service_unavailable"
+        }
+    
+    # Generate OAuth URL
+    redirect_uri = "https://igshop-api.azurewebsites.net/auth/instagram/callback"
+    scope = "user_profile,user_media,instagram_basic"
+    
+    oauth_url = (
+        f"https://api.instagram.com/oauth/authorize"
+        f"?client_id={meta_app_id}"
+        f"&redirect_uri={redirect_uri}"
+        f"&scope={scope}"
+        f"&response_type=code"
+    )
+    
     return {
-        "error": "Instagram OAuth not configured",
-        "message": "Please configure META_APP_ID and META_APP_SECRET environment variables",
-        "status": "service_unavailable"
+        "oauth_url": oauth_url,
+        "redirect_uri": redirect_uri,
+        "app_id": meta_app_id,
+        "status": "ready"
+    }
+
+@app.get("/auth/instagram/callback")
+async def instagram_callback(code: str = None, error: str = None):
+    """Instagram OAuth callback endpoint"""
+    if error:
+        return {
+            "error": error,
+            "message": "Instagram OAuth authorization failed",
+            "status": "failed"
+        }
+    
+    if not code:
+        return {
+            "error": "missing_code",
+            "message": "Authorization code not provided",
+            "status": "failed"
+        }
+    
+    return {
+        "code": code,
+        "message": "Authorization code received successfully",
+        "status": "success",
+        "next_step": "Exchange code for access token"
     }
 
 # Global exception handler
