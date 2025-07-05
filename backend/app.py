@@ -180,7 +180,7 @@ async def debug_filesystem():
         }
 
 # Include routers
-app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(auth.router, tags=["Authentication"])
 app.include_router(conversations.router, prefix="/conversations", tags=["Conversations"])
 app.include_router(orders.router, prefix="/orders", tags=["Orders"])
 app.include_router(catalog.router, prefix="/catalog", tags=["Catalog"])
