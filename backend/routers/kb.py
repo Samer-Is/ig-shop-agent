@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from typing import List
 from pydantic import BaseModel
-from database import get_db_connection, DatabaseService
+from database import get_database, DatabaseService
 import logging
 import os
 import uuid
@@ -18,7 +18,7 @@ class KBDocumentResponse(BaseModel):
 # Dependency to get database connection
 async def get_db() -> DatabaseService:
     """Get database connection"""
-    return await get_db_connection()
+    return await get_database()
 
 @router.get("/", response_model=List[KBDocumentResponse])
 async def get_knowledge_base(db: DatabaseService = Depends(get_db)):

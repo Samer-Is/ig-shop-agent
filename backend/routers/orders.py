@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
 from pydantic import BaseModel
-from database import get_db_connection, DatabaseService
+from database import get_database, DatabaseService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class OrderStatusUpdate(BaseModel):
 # Dependency to get database connection
 async def get_db() -> DatabaseService:
     """Get database connection"""
-    return await get_db_connection()
+    return await get_database()
 
 @router.get("/", response_model=List[OrderResponse])
 async def get_orders(db: DatabaseService = Depends(get_db)):
