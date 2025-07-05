@@ -6,6 +6,13 @@
 // Use environment variable or fallback for API URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://igshop-api.azurewebsites.net';
 
+// Debug logging for API base URL
+console.log('API Service - Environment check:', {
+  VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+  fallback: 'https://igshop-api.azurewebsites.net',
+  final_API_BASE_URL: API_BASE_URL
+});
+
 // Import types from main types file
 import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
 import axios, { AxiosInstance } from 'axios';
@@ -147,6 +154,13 @@ export class ApiService {
   private api: AxiosInstance;
 
   constructor() {
+    console.log('ApiService constructor - API_BASE_URL:', API_BASE_URL);
+    console.log('Environment variables:', {
+      VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+      VITE_ENVIRONMENT: import.meta.env.VITE_ENVIRONMENT,
+      MODE: import.meta.env.MODE
+    });
+    
     this.api = axios.create({
       baseURL: API_BASE_URL,
       headers: {
@@ -188,8 +202,15 @@ export class ApiService {
   // Instagram OAuth
   async getInstagramAuthUrl(): Promise<ApiResponse<{ auth_url: string; state: string }>> {
     try {
+      // Debug logging
+      console.log('API_BASE_URL:', API_BASE_URL);
+      console.log('Full request URL:', `${API_BASE_URL}/auth/instagram/login`);
+      console.log('Making request to Instagram auth endpoint...');
+      
       const response = await this.api.get('/auth/instagram/login');
       const data = response.data;
+      
+      console.log('Instagram auth response:', data);
       
       if (!data?.auth_url || !data?.state) {
         throw new Error('Invalid response: missing auth_url or state');
@@ -198,6 +219,12 @@ export class ApiService {
       return { data, status: response.status };
     } catch (error: any) {
       console.error('Failed to get Instagram auth URL:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: error.config
+      });
       
       // Handle specific error cases
       if (error.response?.status === 500 && error.response?.data?.detail) {
