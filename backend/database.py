@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any, AsyncGenerator
 from datetime import datetime, timezone
 import logging
 from contextlib import asynccontextmanager
-from .config import settings
+from config import settings
 
 logger = logging.getLogger(__name__)
 

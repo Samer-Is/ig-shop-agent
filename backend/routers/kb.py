@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from typing import List
 from pydantic import BaseModel
-from ..database import get_db_connection, DatabaseService
+from database import get_db_connection, DatabaseService
 import logging
 import os
 import uuid

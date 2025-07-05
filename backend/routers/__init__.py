@@ -1,1 +1,1 @@
-from . import auth, catalog, orders, conversations, kb 
+# Router modules are imported directly in app.py 

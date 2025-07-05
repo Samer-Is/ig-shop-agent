@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request, Response
 from fastapi.responses import JSONResponse
-from ..instagram_oauth import get_instagram_auth_url, instagram_oauth
-from ..config import Settings
+from instagram_oauth import get_instagram_auth_url, instagram_oauth
+from config import settings
 import secrets
 import logging
 from typing import Dict, Optional
@@ -29,7 +29,7 @@ class TokenResponse(BaseModel):
     authenticated_at: str
 
 @router.get("/instagram/login")
-async def instagram_login(request: Request, settings: Settings = Depends(Settings)) -> Dict:
+async def instagram_login(request: Request) -> Dict:
     """
     Start Instagram OAuth flow by generating authorization URL
     """
@@ -70,7 +70,7 @@ async def instagram_login(request: Request, settings: Settings = Depends(Setting
         )
 
 @router.post("/instagram/url", response_model=AuthResponse)
-async def get_instagram_oauth_url(request: Request, settings: Settings = Depends(Settings)):
+async def get_instagram_oauth_url(request: Request):
     """Get Instagram OAuth URL for authorization"""
     try:
         logger.info("Generating Instagram OAuth URL")

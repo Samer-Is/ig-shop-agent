@@ -15,7 +15,7 @@ from requests.exceptions import RequestException
 import jwt
 from cryptography.fernet import Fernet
 
-from .config import Settings
+from config import settings
 
 # Configure detailed logging
 logging.basicConfig(
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class InstagramOAuth:
     """Instagram OAuth 2.0 implementation"""
     
-    def __init__(self, settings: Settings = Settings()):
+    def __init__(self):
         try:
             logger.info("Initializing Instagram OAuth with settings: %s", {
                 'app_id': settings.META_APP_ID,

@@ -7,7 +7,7 @@ import os
 import logging
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
-from .config import Settings
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +16,6 @@ class AzureOpenAIService:
     
     def __init__(self):
         """Initialize OpenAI client"""
-        settings = Settings()
-        
         # Use OpenAI API
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         self.model = "gpt-4o"

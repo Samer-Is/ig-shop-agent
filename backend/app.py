@@ -1,10 +1,10 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from .config import Settings
-from .database import get_db_connection, DatabaseService
-from .azure_openai_service import get_openai_client
-from .tenant_middleware import TenantMiddleware
+from config import settings
+from database import get_db_connection, DatabaseService
+from azure_openai_service import get_openai_client
+from tenant_middleware import TenantMiddleware
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 import secrets
@@ -14,8 +14,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="IG Shop Agent API")
 
-# Load settings
-settings = Settings()
+# Settings are already loaded in the config module
 
 # Add session middleware with a secure key
 app.add_middleware(
@@ -136,7 +135,7 @@ async def get_dashboard_analytics(db: DatabaseService = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to get analytics: {str(e)}")
 
 # Import and include routers
-from .routers import auth, catalog, orders, conversations, kb
+from routers import auth, catalog, orders, conversations, kb
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(catalog.router, prefix="/api/catalog", tags=["catalog"])

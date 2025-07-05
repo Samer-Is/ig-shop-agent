@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
 from pydantic import BaseModel
-from ..database import get_db_connection, DatabaseService
-from ..azure_openai_service import get_openai_client
+from database import get_db_connection, DatabaseService
+from azure_openai_service import get_openai_client
 import logging
 import json
 import uuid
