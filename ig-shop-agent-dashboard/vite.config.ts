@@ -36,7 +36,17 @@ export default defineConfig({
         drop_console: true,
         drop_debugger: true
       }
-    }
+    },
+    // Force fresh build - clear all caches
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
+    // Clear build cache
+    emptyOutDir: true,
   },
+  // Clear dev cache
+  cacheDir: '.vite-cache-cleared',
 })
 
