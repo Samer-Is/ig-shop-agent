@@ -1,18 +1,19 @@
 #!/bin/bash
+echo "Starting IG Shop Agent Backend..."
+echo "Current directory: $(pwd)"
+echo "Files in directory: $(ls -la)"
 
-# Azure Web App startup script for IG-Shop-Agent Flask Backend
-echo "🚀 Starting IG-Shop-Agent Flask Backend..."
+# Change to the application directory
+cd /home/site/wwwroot
 
 # Install dependencies
-echo "📦 Installing Python dependencies..."
-cd /home/site/wwwroot
+echo "Installing dependencies..."
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 
 # Set environment variables
-export ENVIRONMENT=production
-export DEBUG=false
+export PYTHONPATH=/home/site/wwwroot
 
-# Start the Flask application
-echo "🌐 Starting Flask server on port 8000..."
-uvicorn app:app --host 0.0.0.0 --port 8000 
+# Start the application
+echo "Starting FastAPI application..."
+exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000} 

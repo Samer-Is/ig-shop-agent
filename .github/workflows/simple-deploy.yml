@@ -30,4 +30,12 @@ jobs:
       uses: azure/webapps-deploy@v2
       with:
         app-name: 'igshop-api'
-        package: '.' 
+        package: '.'
+    
+    - name: Set startup command
+      run: |
+        az webapp config set --name igshop-api --resource-group igshop-dev-rg-v2 --startup-file "uvicorn app:app --host 0.0.0.0 --port 8000"
+    
+    - name: Restart web app
+      run: |
+        az webapp restart --name igshop-api --resource-group igshop-dev-rg-v2 
