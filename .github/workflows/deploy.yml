@@ -89,10 +89,14 @@ jobs:
         cd ig-shop-agent-dashboard
         echo "VITE_API_BASE_URL=https://igshop-api.azurewebsites.net" > .env.production
         echo "VITE_ENVIRONMENT=production" >> .env.production
+        cat .env.production
     
     - name: Build application
       run: |
         cd ig-shop-agent-dashboard
+        # Set environment variables for build process
+        export VITE_API_BASE_URL=https://igshop-api.azurewebsites.net
+        export VITE_ENVIRONMENT=production
         pnpm run build
     
     - name: Deploy to Azure Static Web Apps
