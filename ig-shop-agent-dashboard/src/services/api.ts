@@ -11,24 +11,20 @@ import type { KBDocument as KBDocumentType, Conversation as ConversationType } f
 import axios, { AxiosInstance } from 'axios';
 
 // DEBUG: Log environment variables at load time
-console.log('🔍 ENVIRONMENT DEBUG:');
-console.log('🔍 import.meta.env:', import.meta.env);
-console.log('🔍 VITE_API_BASE_URL from env:', import.meta.env.VITE_API_BASE_URL);
-console.log('🔍 All VITE_ vars:', Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')));
-
+console.log('DEBUG: ENVIRONMENT VARIABLES');
+console.log('DEBUG: import.meta.env:', import.meta.env);
+console.log('DEBUG: VITE_API_BASE_URL from env:', import.meta.env.VITE_API_BASE_URL);
 // API Configuration - HARDCODED CORRECT URL FOR IMMEDIATE FIX
 const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
-console.log('🔧 API_BASE_URL set to:', API_BASE_URL);
-console.log('🔧 typeof API_BASE_URL:', typeof API_BASE_URL);
-console.log('🔧 API_BASE_URL length:', API_BASE_URL.length);
+console.log('DEBUG: API_BASE_URL set to:', API_BASE_URL);
 
 // DEBUG: Check if environment variable would override
 const envUrl = import.meta.env.VITE_API_BASE_URL;
 if (envUrl) {
-  console.log('⚠️ Environment variable VITE_API_BASE_URL exists:', envUrl);
-  console.log('⚠️ But we are using hardcoded URL instead');
+  console.log('WARNING: Environment variable VITE_API_BASE_URL exists:', envUrl);
+  console.log('WARNING: But we are using hardcoded URL instead');
 } else {
-  console.log('❌ Environment variable VITE_API_BASE_URL is not set');
+  console.log('ERROR: Environment variable VITE_API_BASE_URL is not set');
 }
 
 // Create axios instance with the correct base URL
@@ -41,8 +37,7 @@ const api = axios.create({
 });
 
 // DEBUG: Log the actual axios configuration
-console.log('🔧 Axios instance baseURL:', api.defaults.baseURL);
-console.log('🔧 Axios instance config:', api.defaults);
+console.log('DEBUG: Axios instance baseURL:', api.defaults.baseURL);
 
 // API Response types matching FastAPI backend
 interface ApiResponse<T = any> {
@@ -215,25 +210,23 @@ export class ApiService {
   // Instagram OAuth
   async getInstagramAuthUrl(): Promise<ApiResponse<{ auth_url: string; state: string }>> {
     try {
-      console.log('🔍 Making request to /auth/instagram/login...');
-      console.log('🔍 API Base URL:', this.api.defaults.baseURL);
-      console.log('🔍 Full URL will be:', `${this.api.defaults.baseURL}/auth/instagram/login`);
-      console.log('🔍 Request headers:', this.api.defaults.headers);
+      console.log('DEBUG: Making request to /auth/instagram/login...');
+      console.log('DEBUG: API Base URL:', this.api.defaults.baseURL);
+      console.log('DEBUG: Full URL will be:', `${this.api.defaults.baseURL}/auth/instagram/login`);
       
       const response = await this.api.get('/auth/instagram/login');
       
-      console.log('✅ Instagram auth URL response:', response.data);
+      console.log('SUCCESS: Instagram auth URL response:', response.data);
       return {
         data: response.data,
         status: response.status
       };
     } catch (error: any) {
-      console.error('❌ Instagram auth URL error:', error);
-      console.error('❌ Error message:', error.message);
-      console.error('❌ Error response:', error.response?.data);
-      console.error('❌ Error config:', error.config);
-      console.error('❌ Request URL that failed:', error.config?.url);
-      console.error('❌ Base URL used:', error.config?.baseURL);
+      console.error('ERROR: Instagram auth URL error:', error);
+      console.error('ERROR: Error message:', error.message);
+      console.error('ERROR: Error response:', error.response?.data);
+      console.error('ERROR: Request URL that failed:', error.config?.url);
+      console.error('ERROR: Base URL used:', error.config?.baseURL);
       
       return {
         error: error.response?.data?.error || error.message || 'Failed to get Instagram authorization URL',
