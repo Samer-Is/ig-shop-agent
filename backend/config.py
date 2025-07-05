@@ -2,6 +2,9 @@
 IG-Shop-Agent Configuration Module
 Environment variables and settings management - Simplified without pydantic-settings
 """
+# Configuration settings for the Instagram AI Agent SaaS platform
+# Updated to trigger deployment
+
 import os
 from typing import Optional
 
