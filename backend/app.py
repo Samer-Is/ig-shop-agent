@@ -68,11 +68,17 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    from instagram_oauth import instagram_oauth
+    
+    oauth_status = "configured" if hasattr(instagram_oauth, 'is_configured') and instagram_oauth.is_configured else "not_configured"
+    
     return {
         "status": "healthy",
         "service": "ig-shop-agent-backend",
         "version": "1.0.0",
-        "environment": settings.ENVIRONMENT
+        "environment": settings.ENVIRONMENT,
+        "instagram_oauth": oauth_status,
+        "message": "Instagram OAuth not configured - please set META_APP_ID and META_APP_SECRET" if oauth_status == "not_configured" else "All services operational"
     }
 
 # Root endpoint

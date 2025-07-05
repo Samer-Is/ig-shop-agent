@@ -36,17 +36,17 @@ class InstagramOAuth:
     """Instagram OAuth 2.0 implementation"""
     
     def __init__(self):
+        """Initialize Instagram OAuth handler"""
         try:
-            logger.info("Initializing Instagram OAuth with settings: %s", {
-                'app_id': settings.META_APP_ID,
-                'graph_api_version': settings.META_GRAPH_API_VERSION,
-                'redirect_uri': settings.META_REDIRECT_URI
-            })
+            logger.info("Initializing Instagram OAuth...")
             
-            self.app_id = settings.META_APP_ID
-            self.app_secret = settings.META_APP_SECRET
-            self.graph_api_version = settings.META_GRAPH_API_VERSION
-            self.base_url = f"https://graph.facebook.com/{self.graph_api_version}"
+            # OAuth configuration
+            self.base_url = "https://graph.facebook.com"
+            self.graph_api_version = "v21.0"
+            
+            # Get credentials from environment or Azure Key Vault
+            self.app_id = get_secret("META_APP_ID") or os.getenv("META_APP_ID")
+            self.app_secret = get_secret("META_APP_SECRET") or os.getenv("META_APP_SECRET")
             self.redirect_uri = settings.META_REDIRECT_URI
             
             # JWT settings
@@ -54,12 +54,21 @@ class InstagramOAuth:
             self.jwt_algorithm = settings.JWT_ALGORITHM
             self.jwt_expiration_hours = 24  # Default 24 hours
             
-            # Validate required settings
+            # Handle missing credentials gracefully
             if not self.app_id or not self.app_secret:
-                raise ValueError("META_APP_ID and META_APP_SECRET must be configured")
+                logger.warning("⚠️ META_APP_ID and META_APP_SECRET not configured - Instagram OAuth will be disabled")
+                logger.warning("⚠️ Please configure Instagram OAuth credentials in Azure Key Vault or environment variables")
+                self.is_configured = False
+                # Set dummy values to prevent crashes
+                self.app_id = "not_configured"
+                self.app_secret = "not_configured"
+            else:
+                self.is_configured = True
+                logger.info("✅ Instagram OAuth credentials loaded successfully")
             
             if not self.redirect_uri:
-                raise ValueError("META_REDIRECT_URI must be configured")
+                logger.warning("⚠️ META_REDIRECT_URI not configured - using default")
+                self.redirect_uri = "https://igshop-api.azurewebsites.net/auth/instagram/callback"
             
             # Encryption for token storage
             self.encryption_key = self._get_encryption_key()
@@ -68,10 +77,19 @@ class InstagramOAuth:
             # OAuth state management
             self._oauth_states: Dict[str, dict] = {}
             
-            logger.info("✅ Instagram OAuth initialized successfully")
+            if self.is_configured:
+                logger.info("✅ Instagram OAuth initialized successfully")
+            else:
+                logger.info("⚠️ Instagram OAuth initialized in disabled mode")
+                
         except Exception as e:
             logger.error("❌ Failed to initialize Instagram OAuth: %s", str(e), exc_info=True)
-            raise
+            # Don't crash the application - set disabled mode
+            self.is_configured = False
+            self.app_id = "not_configured"
+            self.app_secret = "not_configured"
+            self.redirect_uri = "https://igshop-api.azurewebsites.net/auth/instagram/callback"
+            logger.warning("⚠️ Instagram OAuth disabled due to initialization error")
     
     def _get_encryption_key(self) -> bytes:
         """Get or generate encryption key for token storage"""
@@ -89,6 +107,11 @@ class InstagramOAuth:
     def get_authorization_url(self, redirect_uri: str = None, business_name: str = "") -> Tuple[str, str]:
         """Generate Instagram authorization URL"""
         try:
+            # Check if OAuth is properly configured
+            if not self.is_configured:
+                logger.error("❌ Instagram OAuth not configured - cannot generate authorization URL")
+                raise ValueError("Instagram OAuth is not configured. Please set META_APP_ID and META_APP_SECRET.")
+            
             logger.info("Generating Instagram authorization URL for business: %s", business_name)
             
             # Generate state parameter for CSRF protection

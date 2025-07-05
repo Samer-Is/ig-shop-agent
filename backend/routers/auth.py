@@ -37,6 +37,14 @@ async def instagram_login(request: Request) -> Dict:
     Start Instagram OAuth flow by generating authorization URL
     """
     try:
+        # Check if Instagram OAuth is configured
+        if not hasattr(instagram_oauth, 'is_configured') or not instagram_oauth.is_configured:
+            logger.error("❌ Instagram OAuth not configured")
+            raise HTTPException(
+                status_code=503,
+                detail="Instagram OAuth is not configured. Please contact the administrator to set up META_APP_ID and META_APP_SECRET."
+            )
+        
         # Generate state for CSRF protection
         state = secrets.token_urlsafe(32)
         
@@ -56,10 +64,12 @@ async def instagram_login(request: Request) -> Dict:
         
         return response
         
+    except HTTPException:
+        raise
     except ValueError as e:
         logger.error(f"Configuration error in Instagram auth: {str(e)}")
         raise HTTPException(
-            status_code=500,
+            status_code=503,
             detail=f"Instagram OAuth configuration error: {str(e)}"
         )
     except Exception as e:
