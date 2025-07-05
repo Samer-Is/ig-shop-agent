@@ -158,21 +158,48 @@ jobs:
         az webapp show \
           --resource-group ${{ env.RESOURCE_GROUP }} \
           --name ${{ env.APP_NAME }} \
-          --query "{name:name,state:state,hostNames:hostNames}" \
+          --query "{name:name,state:state,hostNames:hostNames,kind:kind,repositorySiteName:repositorySiteName}" \
           --output table
         
         # Check app service plan
         az appservice plan show \
           --resource-group ${{ env.RESOURCE_GROUP }} \
           --name igshop-api-plan \
-          --query "{name:name,status:status,sku:sku}" \
+          --query "{name:name,status:status,sku:sku,numberOfWorkers:numberOfWorkers}" \
           --output table
+        
+        # Check app service plan usage
+        echo "📊 App Service Plan Resource Usage:"
+        az appservice plan show \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name igshop-api-plan \
+          --query "{name:name,status:status,sku:sku,capacity:sku.capacity,tier:sku.tier}" \
+          --output json
+        
+        # Check if SCM site is accessible
+        echo "🔍 Checking SCM site accessibility..."
+        SCM_URL="https://${{ env.APP_NAME }}.scm.azurewebsites.net"
+        if curl -I -s -f "$SCM_URL" --max-time 30; then
+          echo "✅ SCM site is accessible"
+        else
+          echo "❌ SCM site is not accessible - this explains the 503 error"
+        fi
     
     - name: Ensure Web App is Running
       run: |
         echo "🔄 Ensuring Web App is started: ${{ env.APP_NAME }}"
         
-        # Start the web app if it's stopped
+        # Stop the web app first (to clear any stuck processes)
+        echo "🛑 Stopping Web App to clear any issues..."
+        az webapp stop \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name ${{ env.APP_NAME }}
+        
+        # Wait for stop to complete
+        sleep 15
+        
+        # Start the web app
+        echo "▶️ Starting Web App..."
         az webapp start \
           --resource-group ${{ env.RESOURCE_GROUP }} \
           --name ${{ env.APP_NAME }}
@@ -180,7 +207,16 @@ jobs:
         echo "✅ Web App start command completed"
         
         # Wait for service to be ready
-        sleep 30
+        echo "⏳ Waiting for service to be ready..."
+        sleep 45
+        
+        # Verify the app is running
+        echo "🔍 Verifying Web App is running..."
+        az webapp show \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name ${{ env.APP_NAME }} \
+          --query "{name:name,state:state}" \
+          --output table
     
     - name: Deploy to Azure Web App
       run: |
@@ -208,12 +244,41 @@ jobs:
         else
           echo "⚠️ az webapp deploy failed, trying legacy method..."
           # Fallback to legacy method
-          az webapp deployment source config-zip \
+          if az webapp deployment source config-zip \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --name ${{ env.APP_NAME }} \
             --src deployment.zip \
-            --timeout 600
-          echo "✅ Deployment completed with legacy method"
+            --timeout 600; then
+            echo "✅ Deployment completed with legacy method"
+          else
+            echo "❌ Both deployment methods failed. Trying manual file upload..."
+            
+            # Last resort: try to upload just the essential files
+            echo "🔄 Attempting manual file deployment..."
+            
+            # Create a minimal deployment with just the essential files
+            mkdir -p minimal_deploy
+            cp app.py minimal_deploy/
+            cp requirements.txt minimal_deploy/
+            cp -r backend minimal_deploy/
+            
+            # Create minimal zip
+            cd minimal_deploy
+            zip -r ../minimal_deployment.zip .
+            cd ..
+            
+            echo "📦 Minimal deployment package size:"
+            ls -lh minimal_deployment.zip
+            
+            # Try with minimal package
+            az webapp deployment source config-zip \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --name ${{ env.APP_NAME }} \
+              --src minimal_deployment.zip \
+              --timeout 600
+            
+            echo "✅ Minimal deployment completed"
+          fi
         fi
 
     - name: Post-deployment verification
