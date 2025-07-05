@@ -101,5 +101,7 @@ jobs:
         azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         action: "upload"
-        app_location: "ig-shop-agent-dashboard/dist"
-        skip_app_build: true 
+        app_location: "ig-shop-agent-dashboard"
+        output_location: "dist"
+        skip_app_build: false
+        app_build_command: "VITE_API_BASE_URL=https://igshop-api.azurewebsites.net VITE_ENVIRONMENT=production pnpm run build" 
