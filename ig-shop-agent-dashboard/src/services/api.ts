@@ -6,8 +6,8 @@
  * CRITICAL FIX: Force fresh build to use correct API URL
  */
 
-// API Configuration - CORRECT PRODUCTION URL
-const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
+// API Configuration - USE ENVIRONMENT VARIABLE
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://igshop-api.azurewebsites.net';
 
 // Create axios instance with the correct base URL
 const api = axios.create({
