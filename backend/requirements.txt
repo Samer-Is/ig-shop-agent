@@ -11,3 +11,5 @@ azure-keyvault-secrets==4.7.0
 azure-identity==1.14.1
 asyncpg==0.29.0
 python-dotenv==1.0.0
+itsdangerous==2.1.2
+starlette==0.35.1
