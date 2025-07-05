@@ -1,13 +1,13 @@
 /**
  * Production API Service - Updated to match backend
  * IG-Shop-Agent: Real backend integration
- * FIXED: Environment variables now loaded at build time
- * DEPLOYMENT: Using pre-built dist with hardcoded API URL
- * CRITICAL FIX: Force fresh build to use correct API URL
+ * CRITICAL FIX: Hardcoded correct API URL to fix deployment issue
+ * DEPLOYMENT: Force correct API URL until environment variables work
  */
 
-// API Configuration - USE ENVIRONMENT VARIABLE
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://igshop-api.azurewebsites.net';
+// API Configuration - HARDCODED CORRECT URL FOR IMMEDIATE FIX
+const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
+console.log('🔧 API_BASE_URL set to:', API_BASE_URL);
 
 // Create axios instance with the correct base URL
 const api = axios.create({
