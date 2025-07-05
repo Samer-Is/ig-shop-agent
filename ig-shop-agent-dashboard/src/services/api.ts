@@ -6,6 +6,10 @@
  * CRITICAL DEBUG: Adding comprehensive logging to track API URL source
  */
 
+// Import types from main types file
+import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
+import axios, { AxiosInstance } from 'axios';
+
 // DEBUG: Log environment variables at load time
 console.log('🔍 ENVIRONMENT DEBUG:');
 console.log('🔍 import.meta.env:', import.meta.env);
@@ -39,10 +43,6 @@ const api = axios.create({
 // DEBUG: Log the actual axios configuration
 console.log('🔧 Axios instance baseURL:', api.defaults.baseURL);
 console.log('🔧 Axios instance config:', api.defaults);
-
-// Import types from main types file
-import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
-import axios, { AxiosInstance } from 'axios';
 
 // API Response types matching FastAPI backend
 interface ApiResponse<T = any> {

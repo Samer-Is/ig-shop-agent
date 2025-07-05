@@ -17,12 +17,8 @@ export default defineConfig({
     // Optimize build output for Azure Static Web Apps
     rollupOptions: {
       output: {
-        // Reduce number of chunks to minimize file count
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
-          utils: ['clsx', 'tailwind-merge']
-        },
+        // Force fresh build - clear all caches
+        manualChunks: undefined,
         // Use shorter names for chunks
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',
@@ -33,15 +29,9 @@ export default defineConfig({
     minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: true,
+        drop_console: false, // Keep console logs for debugging
         drop_debugger: true
       }
-    },
-    // Force fresh build - clear all caches
-    rollupOptions: {
-      output: {
-        manualChunks: undefined,
-      },
     },
     // Clear build cache
     emptyOutDir: true,
