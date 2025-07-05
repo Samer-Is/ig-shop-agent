@@ -196,6 +196,52 @@ async def test_endpoint():
         "import_error": import_error
     }
 
+# Instagram OAuth endpoint (workaround)
+@app.get("/auth/instagram/login")
+async def instagram_login_direct():
+    """Instagram OAuth login endpoint - direct implementation"""
+    try:
+        # Import Instagram OAuth
+        from instagram_oauth import get_instagram_auth_url, instagram_oauth
+        from config import settings
+        import secrets
+        
+        # Check if Instagram OAuth is configured
+        if not hasattr(instagram_oauth, 'is_configured') or not instagram_oauth.is_configured:
+            logger.error("❌ Instagram OAuth not configured")
+            return {
+                "error": "Instagram OAuth not configured",
+                "message": "Please contact the administrator to set up META_APP_ID and META_APP_SECRET."
+            }
+        
+        # Generate state for CSRF protection
+        state = secrets.token_urlsafe(32)
+        
+        # Get Instagram auth URL
+        auth_url, _ = get_instagram_auth_url(
+            redirect_uri=settings.META_REDIRECT_URI,
+            business_name=""
+        )
+        
+        logger.info(f"Generated Instagram auth URL with state: {state}")
+        
+        # Create response with auth URL and state
+        response = {
+            "auth_url": auth_url,
+            "state": state,
+            "status": "ready"
+        }
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Failed to generate Instagram auth URL: {str(e)}")
+        return {
+            "error": "Failed to generate Instagram authorization URL",
+            "message": str(e),
+            "status": "error"
+        }
+
 # Include routers only if they were imported successfully
 if routers_imported:
     app.include_router(auth.router, tags=["Authentication"])
