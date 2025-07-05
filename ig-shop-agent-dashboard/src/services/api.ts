@@ -192,16 +192,35 @@ export class ApiService {
   // Instagram OAuth
   async getInstagramAuthUrl(): Promise<ApiResponse<{ auth_url: string; state: string }>> {
     try {
+      console.log('🔍 Making request to /auth/instagram/login...');
+      console.log('🔍 API Base URL:', this.api.defaults.baseURL);
+      
       const response = await this.api.get('/auth/instagram/login');
+      
+      console.log('✅ Response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: response.data
+      });
+      
       const data = response.data;
       
       if (!data?.auth_url || !data?.state) {
-        throw new Error('Invalid response: missing auth_url or state');
+        console.error('❌ Invalid response structure:', data);
+        throw new Error(`Invalid response: missing auth_url (${!!data?.auth_url}) or state (${!!data?.state})`);
       }
       
+      console.log('✅ Valid response structure confirmed');
       return { data, status: response.status };
     } catch (error: any) {
-      console.error('Failed to get Instagram auth URL:', error);
+      console.error('❌ Failed to get Instagram auth URL:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        responseData: error.response?.data,
+        code: error.code
+      });
       
       // Handle specific error cases
       if (error.response?.status === 500 && error.response?.data?.detail) {
@@ -221,7 +240,7 @@ export class ApiService {
       
       // Default error
       return { 
-        error: 'Failed to get Instagram authorization URL. Please try again later.',
+        error: `Failed to get Instagram authorization URL: ${error.message}`,
         status: error.response?.status || 500
       };
     }
