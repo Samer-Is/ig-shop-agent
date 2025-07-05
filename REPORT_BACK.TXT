@@ -1,86 +1,53 @@
 
-Build Operation ID: 241b00bcbaa46636
-OS Type           : bullseye
-Image Type        : githubactions
+﻿
+igshop-dev-yjhtoi-ap…h/instagram/login:1 
+ Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+index-64675a19.js:33 
+ GET https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/login net::ERR_NAME_NOT_RESOLVED
+(anonymous)	@	index-64675a19.js:33
+xhr	@	index-64675a19.js:33
+xa	@	index-64675a19.js:33
+_request	@	index-64675a19.js:33
+request	@	index-64675a19.js:33
+ba.<computed>	@	index-64675a19.js:33
+(anonymous)	@	index-64675a19.js:33
+getInstagramAuthUrl	@	index-64675a19.js:33
+onClick	@	index-64675a19.js:33
+En	@	vendor-88a19e6c.js:20
+Tn	@	vendor-88a19e6c.js:20
+(anonymous)	@	vendor-88a19e6c.js:20
+Cl	@	vendor-88a19e6c.js:20
+_l	@	vendor-88a19e6c.js:20
+(anonymous)	@	vendor-88a19e6c.js:20
+Xs	@	vendor-88a19e6c.js:20
+kn	@	vendor-88a19e6c.js:20
+Ml	@	vendor-88a19e6c.js:20
+Dt	@	vendor-88a19e6c.js:20
+Ot	@	vendor-88a19e6c.js:20
+index-64675a19.js:33 
+ GET https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/login net::ERR_NAME_NOT_RESOLVED
+index-64675a19.js:33 
+ GET https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/login net::ERR_NAME_NOT_RESOLVED
+index-64675a19.js:33 
+ GET https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/login net::ERR_NAME_NOT_RESOLVED
+index-64675a19.js:33 
+ GET https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/login net::ERR_NAME_NOT_RESOLVED
+index-64675a19.js:33 
+ GET https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/login net::ERR_NAME_NOT_RESOLVED
 
-Detecting platforms...
-Detected following platforms:
-  nodejs: 18.20.8
-Version '18.20.8' of platform 'nodejs' is not installed. Generating script to install it...
-Detected the following frameworks: Typescript,React
+ Request URL
+https://igshop-dev-yjhtoi-api.azurewebsites.net/auth/instagram/login
+Referrer Policy
+same-origin
+accept
+application/json, text/plain, */*
+referer
+sec-ch-ua
+"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
 
-
-Source directory     : /github/workspace/ig-shop-agent-dashboard
-Destination directory: /bin/staticsites/de5b1512-ece4-4de4-94bd-f518eed4be2e-swa-oryx/app
-
-
-Downloading and extracting 'nodejs' version '18.20.8' to '/tmp/oryx/platforms/nodejs/18.20.8'...
-Detected image debian flavor: bullseye.
-Downloaded in 0 sec(s).
-Verifying checksum...
-Extracting contents...
-performing sha512 checksum for: nodejs...
-Done in 2 sec(s).
-
-Removing existing manifest file
-Creating directory for command manifest file if it does not exist
-Creating a manifest file...
-Node Build Command Manifest file created.
-
-Using Node version:
-v18.20.8
-
-Using Npm version:
-10.8.2
-
-Running 'npm install'...
-
-
-added 193 packages, and audited 194 packages in 12s
-
-42 packages are looking for funding
-  run `npm fund` for details
-
-3 moderate severity vulnerabilities
-
-To address all issues (including breaking changes), run:
-  npm audit fix --force
-
-Run `npm audit` for details.
-
-Running 'npm run build'...
-
-
-> ig-shop-agent-dashboard@1.0.0 build
-> vite build
-
-vite v4.5.14 building for production...
-transforming...
-✓ 2 modules transformed.
-✓ built in 345ms
-[vite:css] [postcss] Cannot find module 'tailwindcss-animate'
-Require stack:
-- /github/workspace/ig-shop-agent-dashboard/tailwind.config.js
-file: /github/workspace/ig-shop-agent-dashboard/index.html?html-proxy&inline-css&index=0.css:undefined:undefined
-error during build:
-Error: [postcss] Cannot find module 'tailwindcss-animate'
-Require stack:
-- /github/workspace/ig-shop-agent-dashboard/tailwind.config.js
-    at Module._resolveFilename (node:internal/modules/cjs/loader:1140:15)
-    at Function.resolve (node:internal/modules/helpers:188:19)
-    at _resolve (/github/workspace/ig-shop-agent-dashboard/node_modules/jiti/dist/jiti.js:1:246378)
-    at jiti (/github/workspace/ig-shop-agent-dashboard/node_modules/jiti/dist/jiti.js:1:249092)
-    at /github/workspace/ig-shop-agent-dashboard/tailwind.config.js:75:12
-    at evalModule (/github/workspace/ig-shop-agent-dashboard/node_modules/jiti/dist/jiti.js:1:251913)
-    at jiti (/github/workspace/ig-shop-agent-dashboard/node_modules/jiti/dist/jiti.js:1:249841)
-    at /github/workspace/ig-shop-agent-dashboard/node_modules/tailwindcss/lib/lib/load-config.js:52:26
-    at loadConfig (/github/workspace/ig-shop-agent-dashboard/node_modules/tailwindcss/lib/lib/load-config.js:62:6)
-    at getTailwindConfig (/github/workspace/ig-shop-agent-dashboard/node_modules/tailwindcss/lib/lib/setupTrackingContext.js:71:116)
-
-
----End of Oryx build logs---
-Oryx has failed to build the solution.
-
-For further information, please visit the Azure Static Web Apps documentation at https://docs.microsoft.com/en-us/azure/static-web-apps/
-If you believe this behavior is unexpected, please raise a GitHub issue at https://github.com/azure/static-web-apps/issues/
-Exiting
