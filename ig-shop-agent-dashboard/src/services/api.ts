@@ -3,9 +3,10 @@
  * IG-Shop-Agent: Real backend integration
  * FIXED: Environment variables now loaded at build time
  * DEPLOYMENT: Using pre-built dist with hardcoded API URL
+ * CRITICAL FIX: Force fresh build to use correct API URL
  */
 
-// API Configuration
+// API Configuration - CORRECT PRODUCTION URL
 const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
 
 // Create axios instance with the correct base URL
