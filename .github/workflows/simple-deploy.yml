@@ -26,11 +26,13 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
     
-    - name: Deploy to Azure Web App
-      uses: azure/webapps-deploy@v2
-      with:
-        app-name: 'igshop-api'
-        package: '.'
+    - name: Create deployment package
+      run: |
+        zip -r deployment.zip . -x "*.git*" "*.github*" "ig-shop-agent-dashboard*" "infra*" "logs*" "test_deploy*"
+    
+    - name: Deploy to Azure Web App using Azure CLI
+      run: |
+        az webapp deploy --name igshop-api --resource-group igshop-dev-rg-v2 --src-path deployment.zip --type zip
     
     - name: Restart web app
       run: |

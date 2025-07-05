@@ -9,9 +9,12 @@ import sys
 import logging
 from pathlib import Path
 
-# Add the backend directory to Python path
+# Add the backend directory to Python path FIRST
 backend_path = Path(__file__).parent / "backend"
 sys.path.insert(0, str(backend_path))
+
+# Also add the current directory to Python path
+sys.path.insert(0, str(Path(__file__).parent))
 
 # Configure logging
 logging.basicConfig(
@@ -23,8 +26,11 @@ logger = logging.getLogger(__name__)
 def create_app():
     """Create and configure the FastAPI application."""
     try:
+        # Change to backend directory for imports
+        os.chdir(str(backend_path))
+        
         # Import the complete FastAPI application from backend directory
-        from backend.app import app
+        from app import app
         logger.info("✅ Successfully imported FastAPI application from backend")
         
         # Verify app is properly configured
@@ -35,6 +41,8 @@ def create_app():
         
     except Exception as e:
         logger.error(f"❌ Failed to import FastAPI application: {e}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
         raise
 
 # Create the app instance
