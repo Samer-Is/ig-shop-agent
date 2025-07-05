@@ -1,12 +1,3 @@
-/**
- * Production API Service - Updated to match backend
- * IG-Shop-Agent: Real backend integration
- * CRITICAL FIX: Hardcoded correct API URL to fix deployment issue
- * DEPLOYMENT: Force correct API URL until environment variables work
- * CRITICAL DEBUG: Adding comprehensive logging to track API URL source
- */
-
-// Import types from main types file
 import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
 import axios, { AxiosInstance } from 'axios';
 
@@ -14,18 +5,10 @@ import axios, { AxiosInstance } from 'axios';
 console.log('DEBUG: ENVIRONMENT VARIABLES');
 console.log('DEBUG: import.meta.env:', import.meta.env);
 console.log('DEBUG: VITE_API_BASE_URL from env:', import.meta.env.VITE_API_BASE_URL);
-// API Configuration - HARDCODED CORRECT URL FOR IMMEDIATE FIX
+
+// API Configuration - HARDCODED CORRECT URL
 const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
 console.log('DEBUG: API_BASE_URL set to:', API_BASE_URL);
-
-// DEBUG: Check if environment variable would override
-const envUrl = import.meta.env.VITE_API_BASE_URL;
-if (envUrl) {
-  console.log('WARNING: Environment variable VITE_API_BASE_URL exists:', envUrl);
-  console.log('WARNING: But we are using hardcoded URL instead');
-} else {
-  console.log('ERROR: Environment variable VITE_API_BASE_URL is not set');
-}
 
 // Create axios instance with the correct base URL
 const api = axios.create({
@@ -36,10 +19,9 @@ const api = axios.create({
   },
 });
 
-// DEBUG: Log the actual axios configuration
 console.log('DEBUG: Axios instance baseURL:', api.defaults.baseURL);
 
-// API Response types matching FastAPI backend
+// API Response types
 interface ApiResponse<T = any> {
   data?: T;
   error?: string;
@@ -83,7 +65,7 @@ interface AuthResponse {
   };
 }
 
-// Catalog interfaces - matching database schema
+// Catalog interfaces
 interface CatalogItem {
   id: number;
   sku: string;
@@ -106,12 +88,12 @@ interface CreateCatalogItemRequest {
   image_url?: string;
 }
 
-// Order interfaces - matching database schema
+// Order interfaces
 interface Order {
   id: number;
   customer_name: string;
-  customer: string;     // Alternative property name used in some components
-  sku: string;          // Missing SKU property
+  customer: string;
+  sku: string;
   total_amount: number;
   status: string;
   created_at: string;
@@ -119,15 +101,12 @@ interface Order {
 
 // Analytics interfaces
 interface Analytics {
-  // Flat properties expected by frontend
   total_orders: number;
   pending_orders: number;
   confirmed_orders: number;
   total_products: number;
   total_revenue: number;
-  top_products: CatalogItem[];  // Missing property
-  
-  // Nested structures for additional data
+  top_products: CatalogItem[];
   orders: {
     total: number;
     revenue: number;
@@ -235,39 +214,22 @@ export class ApiService {
     }
   }
 
+  // Handle Instagram callback
   async handleInstagramCallback(code: string, state: string): Promise<ApiResponse<any>> {
     try {
-      const response = await this.api.post('/auth/instagram/callback', { code, state });
-      return { data: response.data, status: response.status };
+      const response = await this.api.post('/auth/instagram/callback', {
+        code,
+        state
+      });
+      
+      return {
+        data: response.data,
+        status: response.status
+      };
     } catch (error: any) {
       console.error('Instagram callback error:', error);
-      
-      // Handle specific error cases
-      if (error.response?.status === 400) {
-        return { 
-          error: error.response.data.detail || 'Invalid authentication request. Please try again.',
-          status: error.response.status
-        };
-      }
-      
-      if (error.response?.status === 500) {
-        return { 
-          error: error.response.data.detail || 'Server error during authentication. Please try again later.',
-          status: error.response.status
-        };
-      }
-      
-      // Handle network errors
-      if (error.code === 'ECONNABORTED' || !error.response) {
-        return { 
-          error: 'Network error: Please check your internet connection and try again.',
-          status: 0
-        };
-      }
-      
-      // Default error
-      return { 
-        error: 'Failed to complete Instagram authentication. Please try again.',
+      return {
+        error: error.response?.data?.error || error.message || 'Instagram callback failed',
         status: error.response?.status || 500
       };
     }
@@ -277,145 +239,134 @@ export class ApiService {
   async healthCheck(): Promise<ApiResponse> {
     try {
       const response = await this.api.get('/health');
-      return { data: response.data, status: response.status };
+      return {
+        data: response.data,
+        status: response.status
+      };
     } catch (error: any) {
-      return { 
-        error: error.response?.data?.detail || 'API health check failed',
+      return {
+        error: error.message,
         status: error.response?.status || 500
       };
     }
   }
 
-  // Authentication - Updated to match backend
+  // Authentication methods
   async register(data: RegisterRequest): Promise<ApiResponse<AuthResponse>> {
-    const response = await this.api.post('/auth/register', data);
-    if (response.data?.token) {
-      localStorage.setItem('auth_token', response.data.token);
+    try {
+      const response = await this.api.post('/auth/register', data);
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || error.message };
     }
-    return response;
   }
 
   async login(data: LoginRequest): Promise<ApiResponse<AuthResponse>> {
-    const response = await this.api.post('/auth/login', data);
-    if (response.data?.token) {
-      localStorage.setItem('auth_token', response.data.token);
+    try {
+      const response = await this.api.post('/auth/login', data);
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || error.message };
     }
-    return response;
   }
 
-  // Catalog Management - Updated to match FastAPI backend routes
+  // Catalog methods
   async getCatalog(): Promise<ApiResponse<CatalogItem[]>> {
     try {
       const response = await this.api.get('/catalog');
-      return { data: response.data, status: response.status };
+      return { data: response.data };
     } catch (error: any) {
-      return { 
-        error: error.response?.data?.detail || 'Failed to fetch catalog',
-        status: error.response?.status || 500
-      };
+      return { error: error.response?.data?.error || error.message };
     }
   }
 
   async createCatalogItem(item: CreateCatalogItemRequest): Promise<ApiResponse<{ id: number; message: string; enhanced_description: string }>> {
     try {
       const response = await this.api.post('/catalog', item);
-      return { data: response.data, status: response.status };
+      return { data: response.data };
     } catch (error: any) {
-      return { 
-        error: error.response?.data?.detail || 'Failed to create catalog item',
-        status: error.response?.status || 500
-      };
+      return { error: error.response?.data?.error || error.message };
     }
   }
 
   async updateCatalogItem(itemId: number, item: Partial<CreateCatalogItemRequest>): Promise<ApiResponse<{ message: string }>> {
     try {
       const response = await this.api.put(`/catalog/${itemId}`, item);
-      return { data: response.data, status: response.status };
+      return { data: response.data };
     } catch (error: any) {
-      return { 
-        error: error.response?.data?.detail || 'Failed to update catalog item',
-        status: error.response?.status || 500
-      };
+      return { error: error.response?.data?.error || error.message };
     }
   }
 
   async deleteCatalogItem(itemId: number): Promise<ApiResponse<{ message: string }>> {
     try {
       const response = await this.api.delete(`/catalog/${itemId}`);
-      return { data: response.data, status: response.status };
+      return { data: response.data };
     } catch (error: any) {
-      return { 
-        error: error.response?.data?.detail || 'Failed to delete catalog item',
-        status: error.response?.status || 500
-      };
+      return { error: error.response?.data?.error || error.message };
     }
   }
 
-  // Order Management - Updated to match FastAPI backend routes
+  // Order methods
   async getOrders(): Promise<ApiResponse<Order[]>> {
     try {
       const response = await this.api.get('/orders');
-      return { data: response.data, status: response.status };
+      return { data: response.data };
     } catch (error: any) {
-      return { 
-        error: error.response?.data?.detail || 'Failed to fetch orders',
-        status: error.response?.status || 500
-      };
+      return { error: error.response?.data?.error || error.message };
     }
   }
 
   async updateOrderStatus(orderId: number, status: string): Promise<ApiResponse<{ message: string }>> {
     try {
       const response = await this.api.put(`/orders/${orderId}/status`, { status });
-      return { data: response.data, status: response.status };
+      return { data: response.data };
     } catch (error: any) {
-      return { 
-        error: error.response?.data?.detail || 'Failed to update order status',
-        status: error.response?.status || 500
-      };
+      return { error: error.response?.data?.error || error.message };
     }
   }
 
-  // AI Agent - Updated to match backend
+  // AI methods
   async testAIResponse(message: string): Promise<ApiResponse<AITestResponse>> {
-    const response = await this.api.post('/api/ai/chat', { message });
-    return response;
+    try {
+      const response = await this.api.post('/ai/test-response', { message });
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || error.message };
+    }
   }
 
-  // Analytics - Updated to match backend
+  // Analytics
   async getDashboardAnalytics(): Promise<ApiResponse<Analytics>> {
-    const response = await this.api.get('/api/analytics');
-    return response;
+    try {
+      const response = await this.api.get('/analytics/dashboard');
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || error.message };
+    }
   }
 
-  // Conversations - Updated to match FastAPI backend routes
+  // Conversations
   async getConversations(): Promise<ApiResponse<ConversationApi[]>> {
     try {
       const response = await this.api.get('/conversations');
-      return { data: response.data, status: response.status };
+      return { data: response.data };
     } catch (error: any) {
-      return { 
-        error: error.response?.data?.detail || 'Failed to fetch conversations',
-        status: error.response?.status || 500
-      };
+      return { error: error.response?.data?.error || error.message };
     }
   }
 
-  // Knowledge Base - Updated to match FastAPI backend routes
+  // Knowledge Base
   async getKnowledgeBase(): Promise<ApiResponse<KBDocumentApi[]>> {
     try {
       const response = await this.api.get('/kb');
-      return { data: response.data, status: response.status };
+      return { data: response.data };
     } catch (error: any) {
-      return { 
-        error: error.response?.data?.detail || 'Failed to fetch knowledge base',
-        status: error.response?.status || 500
-      };
+      return { error: error.response?.data?.error || error.message };
     }
   }
 
-  // Test connection
+  // Utility methods
   async testConnection(): Promise<boolean> {
     try {
       const response = await this.healthCheck();
@@ -425,29 +376,21 @@ export class ApiService {
     }
   }
 
-  // Additional methods to match frontend usage
   async verifyToken(): Promise<ApiResponse<{ valid: boolean }>> {
-    if (!localStorage.getItem('auth_token')) {
-      return { data: { valid: false }, status: 200 };
-    }
-    
     try {
-      const response = await this.healthCheck();
-      return { data: { valid: response.status === 200 }, status: response.status };
-    } catch {
-      return { data: { valid: false }, status: 500 };
+      const response = await this.api.get('/auth/verify');
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || error.message };
     }
   }
 
-  // Authentication token management
   setAuthToken(token: string): void {
     localStorage.setItem('auth_token', token);
-    this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   }
 
   clearAuthToken(): void {
     localStorage.removeItem('auth_token');
-    delete this.api.defaults.headers.common['Authorization'];
   }
 
   isAuthenticated(): boolean {
@@ -455,24 +398,30 @@ export class ApiService {
   }
 }
 
-// Create singleton instance
+// Create and export singleton instance
 export const apiService = new ApiService();
 
 // Export types
 export type {
   ApiResponse,
-  InstagramAuthResponse,
-  InstagramCallbackResponse,
-  AuthResponse,
   CatalogItem,
   CreateCatalogItemRequest,
   Order,
   Analytics,
-  Analytics as DashboardAnalytics,
+  ConversationApi as Conversation,
+  KBDocumentApi as KBDocument,
   AITestResponse,
+  AuthResponse,
+  LoginRequest,
+  RegisterRequest
 };
 
-// Utility function to check if API is available
+// Connection check utility
 export const checkApiConnection = async (): Promise<boolean> => {
-  return await apiService.testConnection();
+  try {
+    const response = await apiService.testConnection();
+    return response;
+  } catch {
+    return false;
+  }
 }; 
