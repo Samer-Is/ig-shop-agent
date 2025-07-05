@@ -32,17 +32,24 @@ jobs:
       with:
         app-name: 'igshop-api'
         package: '.'
-        startup-command: 'python main.py'
     
     - name: Configure Web App Settings
       run: |
+        az webapp config set \
+          --resource-group igshop-dev-rg-v2 \
+          --name igshop-api \
+          --linux-fx-version "PYTHON|3.12" \
+          --startup-file "python main.py"
+        
         az webapp config appsettings set \
           --resource-group igshop-dev-rg-v2 \
           --name igshop-api \
           --settings \
             ENVIRONMENT=production \
             FRONTEND_URL=https://red-island-0b863450f.2.azurestaticapps.net \
-            PORT=8000
+            PORT=8000 \
+            SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+            ENABLE_ORYX_BUILD=true
 
   deploy-frontend:
     runs-on: ubuntu-latest
