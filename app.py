@@ -29,9 +29,9 @@ if not os.getenv('DATABASE_URL'):
     os.environ['DATABASE_URL'] = 'postgresql://user:pass@localhost/db'
 
 try:
-    # Import the complete FastAPI application
+    # Import the complete FastAPI application from backend directory
     from backend.app import app
-    logger.info("✅ Successfully imported FastAPI application")
+    logger.info("✅ Successfully imported FastAPI application from backend")
     
     # Verify app is properly configured
     logger.info(f"✅ App title: {app.title}")

@@ -32,18 +32,18 @@ class Settings:
         self.DATABASE_PASSWORD: Optional[str] = os.getenv("DATABASE_PASSWORD")
         
         # JWT Configuration
-        self.JWT_SECRET: str = os.getenv("JWT_SECRET", "your-secret-key-here")
+        self.JWT_SECRET: str = os.getenv("JWT_SECRET", os.getenv("JWT_SECRET_KEY", ""))
         self.JWT_ALGORITHM: str = "HS256"
         self.ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
         
         # Meta/Instagram OAuth Settings
-        self.META_APP_ID: str = os.getenv("META_APP_ID", "1879578119651644")
-        self.META_APP_SECRET: str = os.getenv("META_APP_SECRET", "f79b3350f43751d6139e1b29a232cbf3")
+        self.META_APP_ID: str = os.getenv("META_APP_ID", "")
+        self.META_APP_SECRET: str = os.getenv("META_APP_SECRET", "")
         self.META_GRAPH_API_VERSION: str = "v18.0"
         self.META_REDIRECT_URI: str = os.getenv("META_REDIRECT_URI", "https://red-island-0b863450f.2.azurestaticapps.net/auth/callback")
         
         # OpenAI Configuration
-        self.OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "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")
+        self.OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
         self.OPENAI_API_VERSION: str = "2023-05-15"
         self.OPENAI_DEPLOYMENT_NAME: str = "gpt-4"
         self.OPENAI_EMBEDDING_DEPLOYMENT: str = "text-embedding-ada-002"
@@ -81,7 +81,12 @@ class Settings:
         self.RATE_LIMIT_WINDOW: int = int(os.getenv("RATE_LIMIT_WINDOW", "3600"))  # 1 hour
         
         # CORS Configuration
-        self.CORS_ORIGINS: list = ["*"]  # Update with actual frontend domain in production
+        self.CORS_ORIGINS: list = [
+            "https://red-island-0b863450f.2.azurestaticapps.net",
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173"
+        ]
         
         # Logging Configuration
         self.LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
