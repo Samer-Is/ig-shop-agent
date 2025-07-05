@@ -17,7 +17,14 @@ from config import settings
 from database import get_database, init_database
 
 # Import routers
-from routers import auth, conversations, orders, catalog, kb
+try:
+    from routers import auth, conversations, orders, catalog, kb
+    routers_imported = True
+    import_error = None
+except Exception as e:
+    routers_imported = False
+    import_error = str(e)
+    logger.error(f"Failed to import routers: {e}")
 
 # Configure logging
 logging.basicConfig(
@@ -179,12 +186,25 @@ async def debug_filesystem():
             }
         }
 
-# Include routers
-app.include_router(auth.router, tags=["Authentication"])
-app.include_router(conversations.router, prefix="/conversations", tags=["Conversations"])
-app.include_router(orders.router, prefix="/orders", tags=["Orders"])
-app.include_router(catalog.router, prefix="/catalog", tags=["Catalog"])
-app.include_router(kb.router, prefix="/kb", tags=["Knowledge Base"])
+# Test endpoint
+@app.get("/test")
+async def test_endpoint():
+    """Test endpoint to check if the app is working"""
+    return {
+        "message": "Test endpoint working",
+        "routers_imported": routers_imported,
+        "import_error": import_error
+    }
+
+# Include routers only if they were imported successfully
+if routers_imported:
+    app.include_router(auth.router, tags=["Authentication"])
+    app.include_router(conversations.router, prefix="/conversations", tags=["Conversations"])
+    app.include_router(orders.router, prefix="/orders", tags=["Orders"])
+    app.include_router(catalog.router, prefix="/catalog", tags=["Catalog"])
+    app.include_router(kb.router, prefix="/kb", tags=["Knowledge Base"])
+else:
+    logger.error("❌ Routers not imported - endpoints will not be available")
 
 # Global exception handler
 @app.exception_handler(Exception)
