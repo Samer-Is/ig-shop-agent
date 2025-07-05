@@ -432,6 +432,17 @@ export class ApiService {
     }
   }
 
+  // Authentication token management
+  setAuthToken(token: string): void {
+    localStorage.setItem('auth_token', token);
+    this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  }
+
+  clearAuthToken(): void {
+    localStorage.removeItem('auth_token');
+    delete this.api.defaults.headers.common['Authorization'];
+  }
+
   isAuthenticated(): boolean {
     return !!localStorage.getItem('auth_token');
   }
