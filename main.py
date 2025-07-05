@@ -22,55 +22,27 @@ def create_app():
         # Get the current directory
         current_dir = Path(__file__).parent
         logger.info(f"🔍 Current directory: {current_dir}")
-        logger.info(f"🔍 Directory contents: {list(current_dir.iterdir())}")
         
-        # Check if backend directory exists
-        backend_dir = current_dir / "backend"
-        logger.info(f"🔍 Backend directory path: {backend_dir}")
-        logger.info(f"🔍 Backend directory exists: {backend_dir.exists()}")
-        
-        if backend_dir.exists():
-            logger.info(f"🔍 Backend directory contents: {list(backend_dir.iterdir())}")
-            
-            # Add backend directory to Python path
-            sys.path.insert(0, str(backend_dir))
-            os.environ['PYTHONPATH'] = f"{current_dir}:{backend_dir}:{os.environ.get('PYTHONPATH', '')}"
-            
-            # Change to backend directory for imports
-            os.chdir(backend_dir)
-            logger.info(f"✅ Changed to backend directory: {os.getcwd()}")
-            
-            # Import the FastAPI application
+        # Try to import from root-level app.py first
+        try:
             from app import app
-            logger.info("✅ Successfully imported FastAPI application from backend/app.py")
+            logger.info("✅ Successfully imported FastAPI application from root app.py")
+            return app
+        except ImportError as e:
+            logger.warning(f"Could not import from root app.py: {e}")
             
-        else:
-            # Backend directory doesn't exist, try direct import
-            logger.warning("⚠️ Backend directory not found, trying direct import...")
-            
-            # Check if app.py exists in current directory
-            app_py = current_dir / "app.py"
-            if app_py.exists():
-                logger.info("✅ Found app.py in current directory")
+            # Fallback: try backend directory
+            backend_dir = current_dir / "backend"
+            if backend_dir.exists():
+                logger.info(f"🔍 Trying backend directory: {backend_dir}")
+                sys.path.insert(0, str(backend_dir))
+                os.chdir(backend_dir)
+                
                 from app import app
+                logger.info("✅ Successfully imported FastAPI application from backend/app.py")
+                return app
             else:
-                # Try to find app.py in subdirectories
-                logger.info("🔍 Searching for app.py in subdirectories...")
-                for item in current_dir.rglob("app.py"):
-                    if "backend" in str(item) or item.name == "app.py":
-                        logger.info(f"✅ Found app.py at: {item}")
-                        app_dir = item.parent
-                        sys.path.insert(0, str(app_dir))
-                        os.chdir(app_dir)
-                        from app import app
-                        break
-                else:
-                    raise FileNotFoundError("Could not find app.py in any location")
-        
-        logger.info("✅ Successfully imported FastAPI application")
-        logger.info(f"✅ App title: {app.title}")
-        logger.info(f"✅ Routes configured: {len(app.routes)}")
-        return app
+                raise ImportError("Could not find app.py in root or backend directory")
         
     except Exception as e:
         logger.error(f"❌ Failed to import FastAPI application: {e}")
