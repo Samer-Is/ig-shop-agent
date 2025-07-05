@@ -23,26 +23,18 @@ def create_app():
         current_dir = Path(__file__).parent
         logger.info(f"🔍 Current directory: {current_dir}")
         
-        # Try to import from root-level app.py first
-        try:
-            from app import app
-            logger.info("✅ Successfully imported FastAPI application from root app.py")
-            return app
-        except ImportError as e:
-            logger.warning(f"Could not import from root app.py: {e}")
+        # Import from backend directory (the correct implementation)
+        backend_dir = current_dir / "backend"
+        if backend_dir.exists():
+            logger.info(f"🔍 Using backend directory: {backend_dir}")
+            sys.path.insert(0, str(backend_dir))
+            os.chdir(backend_dir)
             
-            # Fallback: try backend directory
-            backend_dir = current_dir / "backend"
-            if backend_dir.exists():
-                logger.info(f"🔍 Trying backend directory: {backend_dir}")
-                sys.path.insert(0, str(backend_dir))
-                os.chdir(backend_dir)
-                
-                from app import app
-                logger.info("✅ Successfully imported FastAPI application from backend/app.py")
-                return app
-            else:
-                raise ImportError("Could not find app.py in root or backend directory")
+            from app import app
+            logger.info("✅ Successfully imported FastAPI application from backend/app.py")
+            return app
+        else:
+            raise ImportError("Could not find backend directory")
         
     except Exception as e:
         logger.error(f"❌ Failed to import FastAPI application: {e}")

@@ -39,5 +39,5 @@ Deployment Failed, Error: No credentials found. Add an Azure login action before
 14.cloud archetecture is alraeady built, if you need to change it change it with code
 15. any behaviour, code, built, task that is not compliant ti the instructions.txt and instructions_v2.txt will be penalyzed, however there will be huge reward upon completion and fully working web app. im the only one who is gonna tell that the web app is completely wokring. you do not assume.
 16. reevaluate your decisions and steps everytime, see if you can do better
-17. the current code was built by a stupid person, proof to me that you are better
+17. THE BACKEND IS DEPLOYED CORRECTLY AND THE HEALTH IS OKAY, FONRT END IS DEPLOYED BUT WE HAVE A PRESITENT PROBLEM WITH CONNECT TO INSTAGRAM BUTTON WHICH IS NOT WORKING YOU NEED TO DEEPLY INVISIGATE AND MAKE IT WORK
 read the above carefully, build a plan and a check list and update once a task is done
