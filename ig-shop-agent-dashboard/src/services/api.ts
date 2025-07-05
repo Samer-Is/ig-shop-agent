@@ -1,6 +1,7 @@
 /**
  * Production API Service - Updated to match backend
  * IG-Shop-Agent: Real backend integration
+ * FIXED: Environment variables now loaded at build time
  */
 
 // Use environment variable or fallback for API URL

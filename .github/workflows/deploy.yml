@@ -97,7 +97,15 @@ jobs:
         # Set environment variables for build process
         export VITE_API_BASE_URL=https://igshop-api.azurewebsites.net
         export VITE_ENVIRONMENT=production
+        echo "Building with environment variables:"
+        echo "VITE_API_BASE_URL=$VITE_API_BASE_URL"
+        echo "VITE_ENVIRONMENT=$VITE_ENVIRONMENT"
         pnpm run build
+        echo "Build completed. Checking dist folder:"
+        ls -la dist/
+      env:
+        VITE_API_BASE_URL: https://igshop-api.azurewebsites.net
+        VITE_ENVIRONMENT: production
     
     - name: Deploy to Azure Static Web Apps
       uses: Azure/static-web-apps-deploy@v1
