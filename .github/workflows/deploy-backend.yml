@@ -45,9 +45,9 @@ jobs:
         ENV="${{ github.event.inputs.environment || 'dev' }}"
         echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
         
-        # Use the correct app name that exists in Azure
+        # Use the correct web app name (igshop-api, not the function app)
         if [ "$ENV" = "dev" ]; then
-          echo "APP_NAME=igshop-dev-yjhtoi-api" >> $GITHUB_ENV
+          echo "APP_NAME=igshop-api" >> $GITHUB_ENV
           echo "RESOURCE_GROUP=igshop-dev-rg-v2" >> $GITHUB_ENV
           echo "KEYVAULT_NAME=igshop-dev-yjhtoi-kv" >> $GITHUB_ENV
         elif [ "$ENV" = "staging" ]; then
@@ -96,12 +96,12 @@ jobs:
       run: |
         echo "🔧 Configuring Azure Web App: ${{ env.APP_NAME }}"
         
-        # Set runtime and startup command
+        # Set runtime and startup command for the root app.py
         az webapp config set \
           --resource-group ${{ env.RESOURCE_GROUP }} \
           --name ${{ env.APP_NAME }} \
           --linux-fx-version "PYTHON|3.12" \
-          --startup-file "uvicorn production_app:app --host 0.0.0.0 --port 8000"
+          --startup-file "uvicorn app:app --host 0.0.0.0 --port 8000"
         
         # Configure app settings with Key Vault references
         az webapp config appsettings set \
@@ -125,20 +125,27 @@ jobs:
         
     - name: Prepare deployment package
       run: |
-        cd backend
-        
+        # Deploy the entire repo root so app.py can import from backend/
         # Clean up development artifacts
         rm -rf __pycache__ .pytest_cache *.pyc
         find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
         
-        # Ensure requirements.txt exists
+        # Ensure root requirements.txt exists for app.py
         if [ ! -f requirements.txt ]; then
-          echo "Creating minimal requirements.txt..."
+          echo "Creating root requirements.txt..."
           cat > requirements.txt << EOF
         fastapi>=0.104.0
         uvicorn[standard]>=0.24.0
         pydantic>=2.0.0
         python-multipart
+        sqlalchemy
+        psycopg2-binary
+        python-jose[cryptography]
+        passlib[bcrypt]
+        python-dotenv
+        openai
+        azure-identity
+        azure-keyvault-secrets
         EOF
         fi
         
@@ -150,7 +157,7 @@ jobs:
       with:
         app-name: ${{ env.APP_NAME }}
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: './backend'
+        package: '.'
 
     - name: Post-deployment verification
       run: |
