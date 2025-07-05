@@ -242,6 +242,83 @@ async def instagram_login_direct():
             "status": "error"
         }
 
+# Instagram OAuth callback endpoint (workaround)
+@app.post("/auth/instagram/callback")
+async def instagram_callback_direct(request: dict):
+    """Instagram OAuth callback endpoint - direct implementation"""
+    try:
+        # Import Instagram OAuth
+        from instagram_oauth import instagram_oauth
+        from database import get_database
+        
+        code = request.get("code")
+        state = request.get("state")
+        
+        if not code or not state:
+            logger.error("❌ Missing required parameters: code=%s, state=%s", bool(code), bool(state))
+            return {
+                "error": "Missing required parameters",
+                "message": "Code and state are required",
+                "status": "error"
+            }
+        
+        try:
+            # Exchange code for token
+            logger.info("Exchanging authorization code for token")
+            token_data = instagram_oauth.exchange_code_for_token(code, state)
+            
+            if not token_data:
+                logger.error("❌ Failed to exchange code for token - no data returned")
+                return {
+                    "error": "Failed to exchange authorization code for token",
+                    "status": "error"
+                }
+            
+            logger.info("✅ Successfully exchanged code for token")
+            
+            # Get database connection
+            db = await get_database()
+            
+            # Store tokens in database
+            if token_data.get('instagram_accounts'):
+                account = token_data['instagram_accounts'][0]  # Use first account
+                await db.store_instagram_tokens(
+                    account['id'],
+                    account['access_token'],
+                    account
+                )
+            
+            # Create response
+            response = {
+                "success": True,
+                "token": token_data.get('access_token', ''),
+                "user": {
+                    "id": token_data.get('instagram_accounts', [{}])[0].get('id', ''),
+                    "instagram_handle": token_data.get('instagram_accounts', [{}])[0].get('username', ''),
+                    "instagram_connected": True
+                },
+                "instagram_handle": token_data.get('instagram_accounts', [{}])[0].get('username', ''),
+                "status": "success"
+            }
+            
+            return response
+            
+        except ValueError as e:
+            logger.error("❌ Token exchange failed: %s", str(e))
+            return {
+                "error": "Token exchange failed",
+                "message": str(e),
+                "status": "error"
+            }
+            
+    except Exception as e:
+        logger.error("❌ Unexpected error in instagram_callback_direct: %s", str(e))
+        return {
+            "error": "Internal server error",
+            "message": str(e),
+            "status": "error"
+        }
+
 # Include routers only if they were imported successfully
 if routers_imported:
     app.include_router(auth.router, tags=["Authentication"])
