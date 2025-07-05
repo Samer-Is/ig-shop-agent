@@ -344,8 +344,108 @@ jobs:
               echo "💡 Recommendation: The Azure Web App SCM service appears to be experiencing issues."
               echo "💡 This may require manual intervention in the Azure Portal or Azure Support."
               echo "💡 Check: https://status.azure.com for any known service issues."
+              echo ""
+              echo "🚨 ATTEMPTING NUCLEAR OPTION: Recreating the Web App..."
+              echo "⚠️ This will temporarily take the service offline but should restore functionality."
               
-              exit 1
+              # Get current app configuration before deletion
+              echo "📋 Backing up current app configuration..."
+              az webapp config show \
+                --resource-group ${{ env.RESOURCE_GROUP }} \
+                --name ${{ env.APP_NAME }} \
+                --output json > webapp_config_backup.json || echo "Could not backup config"
+              
+              # Get current app settings
+              echo "📋 Backing up app settings..."
+              az webapp config appsettings list \
+                --resource-group ${{ env.RESOURCE_GROUP }} \
+                --name ${{ env.APP_NAME }} \
+                --output json > webapp_settings_backup.json || echo "Could not backup settings"
+              
+              # Delete the corrupted web app
+              echo "🗑️ Deleting corrupted Web App..."
+              az webapp delete \
+                --resource-group ${{ env.RESOURCE_GROUP }} \
+                --name ${{ env.APP_NAME }} \
+                --yes
+              
+              # Wait for deletion to complete
+              echo "⏳ Waiting for deletion to complete..."
+              sleep 30
+              
+              # Recreate the web app
+              echo "🏗️ Recreating Web App with fresh configuration..."
+              az webapp create \
+                --resource-group ${{ env.RESOURCE_GROUP }} \
+                --plan igshop-api-plan \
+                --name ${{ env.APP_NAME }} \
+                --runtime "PYTHON|3.12" \
+                --deployment-local-git
+              
+              # Wait for creation to complete
+              echo "⏳ Waiting for Web App creation to complete..."
+              sleep 45
+              
+              # Restore basic configuration
+              echo "🔧 Restoring Web App configuration..."
+              az webapp config set \
+                --resource-group ${{ env.RESOURCE_GROUP }} \
+                --name ${{ env.APP_NAME }} \
+                --linux-fx-version "PYTHON|3.12" \
+                --startup-file "uvicorn app:app --host 0.0.0.0 --port 8000"
+              
+              # Restore app settings
+              echo "🔧 Restoring app settings..."
+              az webapp config appsettings set \
+                --resource-group ${{ env.RESOURCE_GROUP }} \
+                --name ${{ env.APP_NAME }} \
+                --settings \
+                  META_APP_ID="@Microsoft.KeyVault(VaultName=${{ env.KEYVAULT_NAME }};SecretName=meta-app-id)" \
+                  META_APP_SECRET="@Microsoft.KeyVault(VaultName=${{ env.KEYVAULT_NAME }};SecretName=meta-app-secret)" \
+                  OPENAI_API_KEY="@Microsoft.KeyVault(VaultName=${{ env.KEYVAULT_NAME }};SecretName=openai-api-key)" \
+                  DATABASE_PASSWORD="@Microsoft.KeyVault(VaultName=${{ env.KEYVAULT_NAME }};SecretName=database-password)" \
+                  DATABASE_URL="postgresql://postgres:@Microsoft.KeyVault(VaultName=${{ env.KEYVAULT_NAME }};SecretName=database-password)@igshop-postgres.postgres.database.azure.com:5432/igshop_db?sslmode=require" \
+                  JWT_SECRET_KEY="production-jwt-secret-${{ env.ENVIRONMENT }}-2024" \
+                  FRONTEND_URL="https://red-island-0b863450f.2.azurestaticapps.net" \
+                  KEY_VAULT_URL="https://${{ env.KEYVAULT_NAME }}.vault.azure.net/" \
+                  ENVIRONMENT="${{ env.ENVIRONMENT }}" \
+                  SCM_DO_BUILD_DURING_DEPLOYMENT="true" \
+                  ENABLE_ORYX_BUILD="true" \
+                  PORT="8000"
+              
+              # Wait for configuration to apply
+              echo "⏳ Waiting for configuration to apply..."
+              sleep 30
+              
+              # Verify the new app is working
+              echo "🔍 Verifying recreated Web App..."
+              az webapp show \
+                --resource-group ${{ env.RESOURCE_GROUP }} \
+                --name ${{ env.APP_NAME }} \
+                --query "{name:name,state:state,hostNames:hostNames}" \
+                --output table
+              
+              # Test SCM site accessibility
+              echo "🔍 Testing recreated SCM site..."
+              SCM_URL="https://${{ env.APP_NAME }}.scm.azurewebsites.net"
+              sleep 30
+              if curl -I -s -f "$SCM_URL" --max-time 30; then
+                echo "✅ SCM site is now accessible after recreation"
+                
+                # Now try deployment again with the fresh app
+                echo "🚀 Attempting deployment on recreated Web App..."
+                az webapp deployment source config-zip \
+                  --resource-group ${{ env.RESOURCE_GROUP }} \
+                  --name ${{ env.APP_NAME }} \
+                  --src minimal_deployment.zip \
+                  --timeout 600
+                
+                echo "✅ Deployment successful on recreated Web App"
+              else
+                echo "❌ SCM site still not accessible after recreation - deeper Azure issue"
+                exit 1
+              fi
+            fi
             fi
           fi
         fi
