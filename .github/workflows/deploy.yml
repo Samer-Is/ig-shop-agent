@@ -84,28 +84,19 @@ jobs:
         cd ig-shop-agent-dashboard
         pnpm install
     
-    - name: Configure environment
+    - name: Build application with correct environment
       run: |
         cd ig-shop-agent-dashboard
+        # Create production environment file
         echo "VITE_API_BASE_URL=https://igshop-api.azurewebsites.net" > .env.production
         echo "VITE_ENVIRONMENT=production" >> .env.production
+        echo "Environment file created:"
         cat .env.production
-    
-    - name: Build application
-      run: |
-        cd ig-shop-agent-dashboard
-        # Set environment variables for build process
-        export VITE_API_BASE_URL=https://igshop-api.azurewebsites.net
-        export VITE_ENVIRONMENT=production
-        echo "Building with environment variables:"
-        echo "VITE_API_BASE_URL=$VITE_API_BASE_URL"
-        echo "VITE_ENVIRONMENT=$VITE_ENVIRONMENT"
-        pnpm run build
-        echo "Build completed. Checking dist folder:"
-        ls -la dist/
-      env:
-        VITE_API_BASE_URL: https://igshop-api.azurewebsites.net
-        VITE_ENVIRONMENT: production
+        # Build with environment variables
+        VITE_API_BASE_URL=https://igshop-api.azurewebsites.net VITE_ENVIRONMENT=production pnpm run build
+        echo "Build completed successfully"
+        echo "Checking built files:"
+        ls -la dist/assets/
     
     - name: Deploy to Azure Static Web Apps
       uses: Azure/static-web-apps-deploy@v1
@@ -113,5 +104,7 @@ jobs:
         azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         action: "upload"
-        app_location: "ig-shop-agent-dashboard/dist"
-        skip_app_build: true 
+        app_location: "ig-shop-agent-dashboard"
+        app_build_command: "VITE_API_BASE_URL=https://igshop-api.azurewebsites.net VITE_ENVIRONMENT=production pnpm run build"
+        output_location: "dist"
+        skip_app_build: false 
