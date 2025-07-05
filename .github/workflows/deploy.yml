@@ -77,20 +77,55 @@ jobs:
     - name: Install dependencies and build
       run: |
         cd ig-shop-agent-dashboard
+        echo "🔍 DEBUG: Starting frontend build process"
+        echo "🔍 DEBUG: Current directory: $(pwd)"
+        echo "🔍 DEBUG: Node version: $(node --version)"
+        echo "🔍 DEBUG: NPM version: $(npm --version)"
+        
         # Install dependencies with npm
+        echo "🔍 DEBUG: Installing dependencies..."
         npm install
+        
+        # Debug environment before creating .env
+        echo "🔍 DEBUG: Environment variables before .env creation:"
+        printenv | grep -E "(VITE_|NODE_|npm_)" || echo "No VITE_ variables found"
+        
         # Create .env file with production values
+        echo "🔍 DEBUG: Creating .env file..."
         echo "VITE_API_BASE_URL=https://igshop-api.azurewebsites.net" > .env
         echo "VITE_ENVIRONMENT=production" >> .env
+        echo "🔍 DEBUG: .env file contents:"
         cat .env
+        
+        # Debug environment after creating .env
+        echo "🔍 DEBUG: Environment variables after .env creation:"
+        printenv | grep -E "(VITE_|NODE_|npm_)" || echo "No VITE_ variables found"
+        
         # Build with environment variables
+        echo "🔍 DEBUG: Starting build process..."
         npm run build
-        echo "Build completed successfully"
-        echo "Checking built files:"
+        
+        echo "🔍 DEBUG: Build completed successfully"
+        echo "🔍 DEBUG: Checking built files:"
         ls -la dist/
+        
+        # Check if built files contain the correct API URL
+        echo "🔍 DEBUG: Searching for API URLs in built files..."
+        grep -r "igshop-dev-yjhtoi-api" dist/ || echo "✅ No old API URL found"
+        grep -r "igshop-api.azurewebsites.net" dist/ || echo "❌ New API URL not found"
+        
+        # Check the main JS file for API URLs
+        echo "🔍 DEBUG: Checking main JS files for API URLs..."
+        find dist/ -name "*.js" -exec grep -l "igshop" {} \; | head -5 | while read file; do
+          echo "🔍 DEBUG: Found API references in $file:"
+          grep -o "https://[^\"']*igshop[^\"']*" "$file" || echo "No igshop URLs found"
+        done
+        
         # Copy staticwebapp.config.json to dist folder
         cp public/staticwebapp.config.json dist/
-        echo "Configuration file copied to dist folder"
+        echo "🔍 DEBUG: Configuration file copied to dist folder"
+        echo "🔍 DEBUG: Final dist directory contents:"
+        ls -la dist/
     
     - name: Deploy to Azure Static Web Apps
       uses: Azure/static-web-apps-deploy@v1

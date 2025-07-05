@@ -3,11 +3,29 @@
  * IG-Shop-Agent: Real backend integration
  * CRITICAL FIX: Hardcoded correct API URL to fix deployment issue
  * DEPLOYMENT: Force correct API URL until environment variables work
+ * CRITICAL DEBUG: Adding comprehensive logging to track API URL source
  */
+
+// DEBUG: Log environment variables at load time
+console.log('🔍 ENVIRONMENT DEBUG:');
+console.log('🔍 import.meta.env:', import.meta.env);
+console.log('🔍 VITE_API_BASE_URL from env:', import.meta.env.VITE_API_BASE_URL);
+console.log('🔍 All VITE_ vars:', Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')));
 
 // API Configuration - HARDCODED CORRECT URL FOR IMMEDIATE FIX
 const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
 console.log('🔧 API_BASE_URL set to:', API_BASE_URL);
+console.log('🔧 typeof API_BASE_URL:', typeof API_BASE_URL);
+console.log('🔧 API_BASE_URL length:', API_BASE_URL.length);
+
+// DEBUG: Check if environment variable would override
+const envUrl = import.meta.env.VITE_API_BASE_URL;
+if (envUrl) {
+  console.log('⚠️ Environment variable VITE_API_BASE_URL exists:', envUrl);
+  console.log('⚠️ But we are using hardcoded URL instead');
+} else {
+  console.log('❌ Environment variable VITE_API_BASE_URL is not set');
+}
 
 // Create axios instance with the correct base URL
 const api = axios.create({
@@ -17,6 +35,10 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// DEBUG: Log the actual axios configuration
+console.log('🔧 Axios instance baseURL:', api.defaults.baseURL);
+console.log('🔧 Axios instance config:', api.defaults);
 
 // Import types from main types file
 import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
@@ -195,53 +217,26 @@ export class ApiService {
     try {
       console.log('🔍 Making request to /auth/instagram/login...');
       console.log('🔍 API Base URL:', this.api.defaults.baseURL);
+      console.log('🔍 Full URL will be:', `${this.api.defaults.baseURL}/auth/instagram/login`);
+      console.log('🔍 Request headers:', this.api.defaults.headers);
       
       const response = await this.api.get('/auth/instagram/login');
       
-      console.log('✅ Response received:', {
-        status: response.status,
-        statusText: response.statusText,
-        data: response.data
-      });
-      
-      const data = response.data;
-      
-      if (!data?.auth_url || !data?.state) {
-        console.error('❌ Invalid response structure:', data);
-        throw new Error(`Invalid response: missing auth_url (${!!data?.auth_url}) or state (${!!data?.state})`);
-      }
-      
-      console.log('✅ Valid response structure confirmed');
-      return { data, status: response.status };
+      console.log('✅ Instagram auth URL response:', response.data);
+      return {
+        data: response.data,
+        status: response.status
+      };
     } catch (error: any) {
-      console.error('❌ Failed to get Instagram auth URL:', error);
-      console.error('❌ Error details:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        responseData: error.response?.data,
-        code: error.code
-      });
+      console.error('❌ Instagram auth URL error:', error);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error config:', error.config);
+      console.error('❌ Request URL that failed:', error.config?.url);
+      console.error('❌ Base URL used:', error.config?.baseURL);
       
-      // Handle specific error cases
-      if (error.response?.status === 500 && error.response?.data?.detail) {
-        return { 
-          error: error.response.data.detail,
-          status: error.response.status
-        };
-      }
-      
-      // Handle network errors
-      if (error.code === 'ECONNABORTED' || !error.response) {
-        return { 
-          error: 'Network error: Please check your internet connection and try again.',
-          status: 0
-        };
-      }
-      
-      // Default error
-      return { 
-        error: `Failed to get Instagram authorization URL: ${error.message}`,
+      return {
+        error: error.response?.data?.error || error.message || 'Failed to get Instagram authorization URL',
         status: error.response?.status || 500
       };
     }
