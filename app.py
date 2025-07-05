@@ -1,15 +1,17 @@
+#!/usr/bin/env python3
 """
-IG-Shop-Agent Production Application
-Entry point for Azure Web App deployment
+IG-Shop-Agent - Main Application Entry Point
+This file serves as the entry point for the FastAPI application.
 """
+
 import os
 import sys
 import logging
 from pathlib import Path
 
-# Add backend directory to Python path
-backend_dir = Path(__file__).parent / "backend"
-sys.path.insert(0, str(backend_dir))
+# Add the backend directory to Python path
+backend_path = Path(__file__).parent / "backend"
+sys.path.insert(0, str(backend_path))
 
 # Configure logging
 logging.basicConfig(
@@ -41,9 +43,19 @@ except Exception as e:
     logger.error(f"❌ Failed to import FastAPI application: {e}")
     raise
 
-# Export the app for WSGI server
-application = app
-
+# If running directly, start the server
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    
+    # Get port from environment or default to 8000
+    port = int(os.environ.get("PORT", 8000))
+    
+    logger.info(f"🚀 Starting FastAPI server on port {port}")
+    
+    # Start the server
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port,
+        log_level="info"
+    ) 

@@ -13,7 +13,11 @@ pip install -r requirements.txt
 
 # Set environment variables
 export PYTHONPATH=/home/site/wwwroot
+export PORT=${PORT:-8000}
+
+# Make app.py executable
+chmod +x app.py
 
 # Start the application
 echo "Starting FastAPI application..."
-exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000} 
+exec python app.py 
