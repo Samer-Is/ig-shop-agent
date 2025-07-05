@@ -92,6 +92,29 @@ async def root():
         "docs": "/docs"
     }
 
+# Debug endpoint to check file system
+@app.get("/debug/filesystem")
+async def debug_filesystem():
+    """Debug endpoint to check file system structure"""
+    import os
+    from pathlib import Path
+    
+    current_dir = Path.cwd()
+    parent_dir = current_dir.parent
+    
+    return {
+        "current_working_directory": str(current_dir),
+        "parent_directory": str(parent_dir),
+        "current_dir_contents": [str(item) for item in current_dir.iterdir()],
+        "parent_dir_contents": [str(item) for item in parent_dir.iterdir()] if parent_dir.exists() else [],
+        "python_path": os.environ.get("PYTHONPATH", ""),
+        "environment_vars": {
+            "PORT": os.environ.get("PORT", ""),
+            "ENVIRONMENT": os.environ.get("ENVIRONMENT", ""),
+            "PYTHONPATH": os.environ.get("PYTHONPATH", "")
+        }
+    }
+
 # Include routers
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(conversations.router, prefix="/conversations", tags=["Conversations"])
