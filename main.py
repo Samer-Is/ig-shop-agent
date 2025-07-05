@@ -47,13 +47,14 @@ if __name__ == "__main__":
     
     # Get port from environment or default to 8000
     port = int(os.environ.get("PORT", 8000))
+    host = os.environ.get("HOST", "0.0.0.0")
     
-    logger.info(f"🚀 Starting FastAPI server on port {port}")
+    logger.info(f"🚀 Starting FastAPI server on {host}:{port}")
     
     # Start the server
     uvicorn.run(
         app,
-        host="0.0.0.0",
+        host=host,
         port=port,
         log_level="info"
     ) 
