@@ -3,8 +3,8 @@
  * IG-Shop-Agent: Enterprise SaaS Platform
  */
 
-// Production API base URL - Python Flask Backend
-const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
+// Production API base URL - Python FastAPI Backend
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://igshop-dev-yjhtoi-api.azurewebsites.net';
 
 export interface ApiResponse<T> {
   data?: T;

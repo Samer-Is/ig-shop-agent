@@ -1,0 +1,43 @@
+1.check the current cloud infrastructure.
+2. make sure that fornt end and back end are deployed and connected to each other.
+3. check functionalites in the front end, is it working well with the back end, are apis and end points are correctly cofigured and connected?
+4. github work flow deplyment is not wokring it have faild multiple times, the last time i recieved this error:
+
+Deploy IG-Shop-Agent
+ci: add Azure Static Web Apps workflow file #2
+Jobs
+Run details
+Triggered via push 28 minutes ago
+@Samer-IsSamer-Is
+pushed
+ a6c946c
+main
+Status
+Failure
+Total duration
+1m 15s
+Artifacts
+–
+
+
+Annotations
+2 errors
+docker-build
+Username and password required
+build-and-deploy-azure
+Deployment Failed, Error: No credentials found. Add an Azure login action before this action. For more details refer https://github.com/azure/login
+
+5. i do not want at all a local depolyment, everything must be in cloud only.
+6. the end to end solution must be ready and fully functional without bugs and errors, and that is your resposibility.
+7. i need this system to be ready to be sold to merchents asap
+8.its really important to check the log in logic, instagram connect button it must work in order for the system to work and you know that.
+9. no demo data, no mock data, real data with real api data and conections
+10. github secrets AZURE_WEBAPP_PUBLISH_PROFILE, AZURE_STATIC_WEB_APPS_API_TOKEN, AZURE_CREDENTIALS are correctly configured
+11. if you see ambigous files, structures or anything is not complying with instructions.txt and instructions_v2.txt delete it totally
+12. do not at any circumistance use "&&" in the powershell terminal as it wont work
+13. i need fully working web app, complete frontend functionality, well connected to back end. to be sold directly so do whatever it takes to make it work.
+14.cloud archetecture is alraeady built, if you need to change it change it with code
+15. any behaviour, code, built, task that is not compliant ti the instructions.txt and instructions_v2.txt will be penalyzed, however there will be huge reward upon completion and fully working web app. im the only one who is gonna tell that the web app is completely wokring. you do not assume.
+16. reevaluate your decisions and steps everytime, see if you can do better
+17. the current code was built by a stupid person, proof to me that you are better
+read the above carefully, build a plan and a check list and update once a task is done

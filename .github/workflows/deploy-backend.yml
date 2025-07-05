@@ -45,9 +45,9 @@ jobs:
         ENV="${{ github.event.inputs.environment || 'dev' }}"
         echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
         
-        # Use the correct web app name (igshop-api, not the function app)
+        # Use the correct web app name with unique string
         if [ "$ENV" = "dev" ]; then
-          echo "APP_NAME=igshop-api" >> $GITHUB_ENV
+          echo "APP_NAME=igshop-dev-yjhtoi-api" >> $GITHUB_ENV
           echo "RESOURCE_GROUP=igshop-dev-rg-v2" >> $GITHUB_ENV
           echo "KEYVAULT_NAME=igshop-dev-yjhtoi-kv" >> $GITHUB_ENV
         elif [ "$ENV" = "staging" ]; then
@@ -62,13 +62,11 @@ jobs:
         
     - name: Install dependencies
       run: |
-        cd backend
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r backend/requirements.txt
         
     - name: Test FastAPI application
       run: |
-        cd backend
         python -c "
         import os
         import sys
@@ -78,7 +76,7 @@ jobs:
         os.environ['OPENAI_API_KEY'] = 'test'
         os.environ['DATABASE_URL'] = 'postgresql://test:test@localhost/test'
         try:
-            from production_app import app
+            from app import app
             print('✅ FastAPI app imports successfully')
             print(f'✅ App title: {app.title}')
             print(f'✅ Routes: {len(app.routes)} routes configured')
@@ -114,7 +112,7 @@ jobs:
             DATABASE_PASSWORD="@Microsoft.KeyVault(VaultName=${{ env.KEYVAULT_NAME }};SecretName=database-password)" \
             DATABASE_URL="postgresql://postgres:@Microsoft.KeyVault(VaultName=${{ env.KEYVAULT_NAME }};SecretName=database-password)@igshop-postgres.postgres.database.azure.com:5432/igshop_db?sslmode=require" \
             JWT_SECRET_KEY="production-jwt-secret-${{ env.ENVIRONMENT }}-2024" \
-            FRONTEND_URL="https://igshop-dev-yjhtoi-swa.azurestaticapps.net" \
+            FRONTEND_URL="https://red-island-0b863450f.2.azurestaticapps.net" \
             KEY_VAULT_URL="https://${{ env.KEYVAULT_NAME }}.vault.azure.net/" \
             ENVIRONMENT="${{ env.ENVIRONMENT }}" \
             SCM_DO_BUILD_DURING_DEPLOYMENT="true" \

@@ -4,7 +4,7 @@
  */
 
 // Use environment variable or fallback for API URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://igshop-dev-yjhtoi-api.azurewebsites.net';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://igshop-dev-yjhtoi-api.azurewebsites.net';
 
 // Import types from main types file
 import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
