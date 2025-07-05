@@ -5,11 +5,17 @@
  * DEPLOYMENT: Using pre-built dist with hardcoded API URL
  */
 
-// Use environment variable or fallback for API URL - HARDCODED TO CORRECT URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://igshop-api.azurewebsites.net';
+// API Configuration
+const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
 
-// FORCE CORRECT URL - TEMPORARY FIX
-const CORRECT_API_URL = 'https://igshop-api.azurewebsites.net';
+// Create axios instance with the correct base URL
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 // Import types from main types file
 import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
@@ -152,14 +158,7 @@ export class ApiService {
   private api: AxiosInstance;
 
   constructor() {
-    this.api = axios.create({
-      baseURL: CORRECT_API_URL,  // Use hardcoded correct URL
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      timeout: 30000,  // 30 second timeout
-      withCredentials: false  // Changed to false for cross-origin requests
-    });
+    this.api = api;
 
     // Add request interceptor to add auth token
     this.api.interceptors.request.use(

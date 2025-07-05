@@ -15,12 +15,10 @@
     "exclude": ["/images/*.{png,jpg,gif,ico,svg}", "/api/*"]
   },
   "mimeTypes": {
-    ".json": "application/json",
-    ".js": "application/javascript",
-    ".css": "text/css"
+    ".json": "application/json"
   },
   "globalHeaders": {
-    "cache-control": "public, max-age=31536000, immutable"
+    "Cache-Control": "no-cache"
   },
   "responseOverrides": {
     "404": {
