@@ -370,8 +370,7 @@ jobs:
                 --name ${{ env.APP_NAME }} \
                 --resource-group ${{ env.RESOURCE_GROUP }} \
                 --plan igshop-api-plan \
-                --runtime "PYTHON|3.12" \
-                --os-type Linux
+                --runtime "PYTHON|3.12"
               
               # Wait for creation to complete
               echo "⏳ Waiting for Web App to be ready..."
