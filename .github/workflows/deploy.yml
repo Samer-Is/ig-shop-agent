@@ -79,9 +79,11 @@ jobs:
         cd ig-shop-agent-dashboard
         # Install dependencies with npm
         npm install
+        # Create .env file with production values
+        echo "VITE_API_BASE_URL=https://igshop-api.azurewebsites.net" > .env
+        echo "VITE_ENVIRONMENT=production" >> .env
+        cat .env
         # Build with environment variables
-        export VITE_API_BASE_URL=https://igshop-api.azurewebsites.net
-        export VITE_ENVIRONMENT=production
         npm run build
         echo "Build completed successfully"
         echo "Checking built files:"
