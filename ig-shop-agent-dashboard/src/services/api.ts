@@ -4,16 +4,17 @@
  */
 
 // Use environment variable or fallback for API URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://igshop-dev-yjhtoi-api.azurewebsites.net';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://igshop-api.azurewebsites.net';
 
 // Import types from main types file
 import type { KBDocument as KBDocumentType, Conversation as ConversationType } from '../types';
 import axios, { AxiosInstance } from 'axios';
 
-// API Response types matching Flask backend
+// API Response types matching FastAPI backend
 interface ApiResponse<T = any> {
   data?: T;
   error?: string;
+  status?: number;
 }
 
 // Authentication interfaces
@@ -151,14 +152,34 @@ export class ApiService {
       headers: {
         'Content-Type': 'application/json',
       },
-      withCredentials: true  // Important for cookies
+      timeout: 30000,  // 30 second timeout
+      withCredentials: false  // Changed to false for cross-origin requests
     });
+
+    // Add request interceptor to add auth token
+    this.api.interceptors.request.use(
+      (config) => {
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
 
     // Add response interceptor for error handling
     this.api.interceptors.response.use(
       (response) => response,
       (error) => {
-        console.error('API Error:', error.response?.data || error);
+        console.error('API Error:', error.response?.data || error.message);
+        
+        // Handle 401 errors by clearing token
+        if (error.response?.status === 401) {
+          localStorage.removeItem('auth_token');
+          window.location.href = '/login';
+        }
+        
         return Promise.reject(error);
       }
     );
@@ -174,27 +195,30 @@ export class ApiService {
         throw new Error('Invalid response: missing auth_url or state');
       }
       
-      return { data };
+      return { data, status: response.status };
     } catch (error: any) {
       console.error('Failed to get Instagram auth URL:', error);
       
       // Handle specific error cases
       if (error.response?.status === 500 && error.response?.data?.detail) {
         return { 
-          error: error.response.data.detail 
+          error: error.response.data.detail,
+          status: error.response.status
         };
       }
       
       // Handle network errors
       if (error.code === 'ECONNABORTED' || !error.response) {
         return { 
-          error: 'Network error: Please check your internet connection and try again.' 
+          error: 'Network error: Please check your internet connection and try again.',
+          status: 0
         };
       }
       
       // Default error
       return { 
-        error: 'Failed to get Instagram authorization URL. Please try again later.' 
+        error: 'Failed to get Instagram authorization URL. Please try again later.',
+        status: error.response?.status || 500
       };
     }
   }
@@ -202,33 +226,37 @@ export class ApiService {
   async handleInstagramCallback(code: string, state: string): Promise<ApiResponse<any>> {
     try {
       const response = await this.api.post('/auth/instagram/callback', { code, state });
-      return { data: response.data };
+      return { data: response.data, status: response.status };
     } catch (error: any) {
       console.error('Instagram callback error:', error);
       
       // Handle specific error cases
       if (error.response?.status === 400) {
         return { 
-          error: error.response.data.detail || 'Invalid authentication request. Please try again.' 
+          error: error.response.data.detail || 'Invalid authentication request. Please try again.',
+          status: error.response.status
         };
       }
       
       if (error.response?.status === 500) {
         return { 
-          error: error.response.data.detail || 'Server error during authentication. Please try again later.' 
+          error: error.response.data.detail || 'Server error during authentication. Please try again later.',
+          status: error.response.status
         };
       }
       
       // Handle network errors
       if (error.code === 'ECONNABORTED' || !error.response) {
         return { 
-          error: 'Network error: Please check your internet connection and try again.' 
+          error: 'Network error: Please check your internet connection and try again.',
+          status: 0
         };
       }
       
       // Default error
       return { 
-        error: 'Failed to complete Instagram authentication. Please try again.' 
+        error: 'Failed to complete Instagram authentication. Please try again.',
+        status: error.response?.status || 500
       };
     }
   }
@@ -237,9 +265,12 @@ export class ApiService {
   async healthCheck(): Promise<ApiResponse> {
     try {
       const response = await this.api.get('/health');
-      return { data: response.data };
+      return { data: response.data, status: response.status };
     } catch (error: any) {
-      return { error: error.response?.data?.detail || 'API health check failed' };
+      return { 
+        error: error.response?.data?.detail || 'API health check failed',
+        status: error.response?.status || 500
+      };
     }
   }
 
@@ -260,36 +291,78 @@ export class ApiService {
     return response;
   }
 
-  // Catalog Management - Updated to match backend
+  // Catalog Management - Updated to match FastAPI backend routes
   async getCatalog(): Promise<ApiResponse<CatalogItem[]>> {
-    const response = await this.api.get('/api/catalog');
-    return response;
+    try {
+      const response = await this.api.get('/catalog');
+      return { data: response.data, status: response.status };
+    } catch (error: any) {
+      return { 
+        error: error.response?.data?.detail || 'Failed to fetch catalog',
+        status: error.response?.status || 500
+      };
+    }
   }
 
   async createCatalogItem(item: CreateCatalogItemRequest): Promise<ApiResponse<{ id: number; message: string; enhanced_description: string }>> {
-    const response = await this.api.post('/api/catalog', item);
-    return response;
+    try {
+      const response = await this.api.post('/catalog', item);
+      return { data: response.data, status: response.status };
+    } catch (error: any) {
+      return { 
+        error: error.response?.data?.detail || 'Failed to create catalog item',
+        status: error.response?.status || 500
+      };
+    }
   }
 
   async updateCatalogItem(itemId: number, item: Partial<CreateCatalogItemRequest>): Promise<ApiResponse<{ message: string }>> {
-    const response = await this.api.put(`/api/catalog/${itemId}`, item);
-    return response;
+    try {
+      const response = await this.api.put(`/catalog/${itemId}`, item);
+      return { data: response.data, status: response.status };
+    } catch (error: any) {
+      return { 
+        error: error.response?.data?.detail || 'Failed to update catalog item',
+        status: error.response?.status || 500
+      };
+    }
   }
 
   async deleteCatalogItem(itemId: number): Promise<ApiResponse<{ message: string }>> {
-    const response = await this.api.delete(`/api/catalog/${itemId}`);
-    return response;
+    try {
+      const response = await this.api.delete(`/catalog/${itemId}`);
+      return { data: response.data, status: response.status };
+    } catch (error: any) {
+      return { 
+        error: error.response?.data?.detail || 'Failed to delete catalog item',
+        status: error.response?.status || 500
+      };
+    }
   }
 
-  // Order Management - Updated to match backend
+  // Order Management - Updated to match FastAPI backend routes
   async getOrders(): Promise<ApiResponse<Order[]>> {
-    const response = await this.api.get('/api/orders');
-    return response;
+    try {
+      const response = await this.api.get('/orders');
+      return { data: response.data, status: response.status };
+    } catch (error: any) {
+      return { 
+        error: error.response?.data?.detail || 'Failed to fetch orders',
+        status: error.response?.status || 500
+      };
+    }
   }
 
   async updateOrderStatus(orderId: number, status: string): Promise<ApiResponse<{ message: string }>> {
-    const response = await this.api.put(`/api/orders/${orderId}/status`, { status });
-    return response;
+    try {
+      const response = await this.api.put(`/orders/${orderId}/status`, { status });
+      return { data: response.data, status: response.status };
+    } catch (error: any) {
+      return { 
+        error: error.response?.data?.detail || 'Failed to update order status',
+        status: error.response?.status || 500
+      };
+    }
   }
 
   // AI Agent - Updated to match backend
@@ -304,16 +377,30 @@ export class ApiService {
     return response;
   }
 
-  // Knowledge Base - Placeholder (not implemented in backend yet)
-  async getKnowledgeBase(): Promise<KBDocumentApi[]> {
-    // Backend doesn't have this endpoint yet, return empty
-    return [];
+  // Conversations - Updated to match FastAPI backend routes
+  async getConversations(): Promise<ApiResponse<ConversationApi[]>> {
+    try {
+      const response = await this.api.get('/conversations');
+      return { data: response.data, status: response.status };
+    } catch (error: any) {
+      return { 
+        error: error.response?.data?.detail || 'Failed to fetch conversations',
+        status: error.response?.status || 500
+      };
+    }
   }
 
-  // Conversations - Placeholder (not implemented in backend yet)
-  async getConversations(): Promise<ConversationApi[]> {
-    // Backend doesn't have this endpoint yet, return empty
-    return [];
+  // Knowledge Base - Updated to match FastAPI backend routes
+  async getKnowledgeBase(): Promise<ApiResponse<KBDocumentApi[]>> {
+    try {
+      const response = await this.api.get('/kb');
+      return { data: response.data, status: response.status };
+    } catch (error: any) {
+      return { 
+        error: error.response?.data?.detail || 'Failed to fetch knowledge base',
+        status: error.response?.status || 500
+      };
+    }
   }
 
   // Test connection
@@ -332,8 +419,12 @@ export class ApiService {
       return { data: { valid: false }, status: 200 };
     }
     
-    const response = await this.healthCheck();
-    return { data: { valid: response.status === 200 }, status: response.status };
+    try {
+      const response = await this.healthCheck();
+      return { data: { valid: response.status === 200 }, status: response.status };
+    } catch {
+      return { data: { valid: false }, status: 500 };
+    }
   }
 
   isAuthenticated(): boolean {

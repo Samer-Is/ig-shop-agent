@@ -268,26 +268,39 @@ class DatabaseService:
             logger.error(f"Failed to store Instagram tokens: {e}")
             raise
 
-async def get_db_connection() -> DatabaseService:
+async def get_database() -> DatabaseService:
     """Get the global database service instance"""
     global db_service
-    
     if db_service is None:
         db_service = DatabaseService()
         await db_service.connect()
-    
     return db_service
 
-@asynccontextmanager
-async def database_lifespan():
-    """Manage database connection lifecycle"""
+async def init_database() -> None:
+    """Initialize the database connection and schema"""
     try:
-        db = await get_db_connection()
+        logger.info("Initializing database...")
+        db = await get_database()
+        
+        # Initialize schema
         await db.initialize_schema()
-        yield db
-    finally:
-        if db_service:
-            await db_service.disconnect()
+        
+        logger.info("✅ Database initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Database initialization failed: {e}")
+        raise
+
+async def close_database() -> None:
+    """Close the database connection"""
+    global db_service
+    if db_service:
+        await db_service.disconnect()
+        db_service = None
+
+# Dependency for FastAPI
+async def get_db() -> DatabaseService:
+    """FastAPI dependency to get database service"""
+    return await get_database()
 
 # Export for convenience
 __all__ = ["db_service", "get_db_connection", "database_lifespan", "DatabaseService"] 

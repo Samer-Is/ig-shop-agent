@@ -1,21 +1,24 @@
 #!/bin/bash
 
-# Navigate to app directory
-cd /home/site/wwwroot
+# IG-Shop-Agent Backend Startup Script
+# Azure Web App startup configuration
 
-# Create and activate virtual environment if it doesn't exist
-if [ ! -d "antenv" ]; then
-    python -m venv antenv
-fi
-source antenv/bin/activate
+set -e
 
-# Install dependencies
-pip install -r requirements.txt
+echo "Starting IG-Shop-Agent Backend..."
+echo "Environment: $ENVIRONMENT"
+echo "Python version: $(python --version)"
 
 # Set environment variables
-export FLASK_APP=production_app.py
+export PYTHONPATH="/home/site/wwwroot/backend:$PYTHONPATH"
+export FLASK_APP=app.py
 export FLASK_ENV=production
-export PORT=8080
 
-# Start Gunicorn
-gunicorn --bind=0.0.0.0:8080 --timeout 600 production_app:app
+# Install dependencies if needed
+echo "Installing dependencies..."
+pip install -r requirements.txt
+
+# Start the FastAPI application with uvicorn
+echo "Starting FastAPI application..."
+cd /home/site/wwwroot
+uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1

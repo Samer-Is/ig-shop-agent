@@ -9,12 +9,9 @@ import sys
 import logging
 from pathlib import Path
 
-# Add the backend directory to Python path FIRST
+# Add the backend directory to Python path
 backend_path = Path(__file__).parent / "backend"
 sys.path.insert(0, str(backend_path))
-
-# Also add the current directory to Python path
-sys.path.insert(0, str(Path(__file__).parent))
 
 # Configure logging
 logging.basicConfig(
@@ -26,17 +23,11 @@ logger = logging.getLogger(__name__)
 def create_app():
     """Create and configure the FastAPI application."""
     try:
-        # Change to backend directory for imports
-        os.chdir(str(backend_path))
-        
-        # Import the complete FastAPI application from backend directory
-        from app import app
-        logger.info("✅ Successfully imported FastAPI application from backend")
-        
-        # Verify app is properly configured
+        # Import the FastAPI application from backend
+        from backend.app import app
+        logger.info("✅ Successfully imported FastAPI application")
         logger.info(f"✅ App title: {app.title}")
         logger.info(f"✅ Routes configured: {len(app.routes)}")
-        
         return app
         
     except Exception as e:
@@ -48,7 +39,7 @@ def create_app():
 # Create the app instance
 app = create_app()
 
-# For Azure Web Apps
+# For Azure Web Apps compatibility
 application = app
 
 if __name__ == "__main__":

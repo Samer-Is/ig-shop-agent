@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from instagram_oauth import get_instagram_auth_url, instagram_oauth
 from config import settings
+from database import get_database
 import secrets
 import logging
 from typing import Dict, Optional
@@ -20,13 +21,15 @@ class AuthResponse(BaseModel):
     auth_url: str
     state: str
 
+class CallbackRequest(BaseModel):
+    code: str
+    state: str
+
 class TokenResponse(BaseModel):
-    access_token: str
-    expires_in: int
-    token_type: str
-    instagram_accounts: list
-    business_name: str
-    authenticated_at: str
+    success: bool
+    token: str
+    user: dict
+    instagram_handle: str
 
 @router.get("/instagram/login")
 async def instagram_login(request: Request) -> Dict:
@@ -36,9 +39,6 @@ async def instagram_login(request: Request) -> Dict:
     try:
         # Generate state for CSRF protection
         state = secrets.token_urlsafe(32)
-        
-        # Store state in session
-        request.session["oauth_state"] = state
         
         # Get Instagram auth URL
         auth_url, _ = get_instagram_auth_url(
@@ -69,54 +69,81 @@ async def instagram_login(request: Request) -> Dict:
             detail="Failed to generate Instagram authorization URL. Please try again later."
         )
 
-@router.post("/instagram/url", response_model=AuthResponse)
-async def get_instagram_oauth_url(request: Request):
-    """Get Instagram OAuth URL for authorization"""
+@router.post("/instagram/callback")
+async def instagram_callback_post(callback_data: CallbackRequest) -> TokenResponse:
+    """
+    Handle Instagram OAuth callback (POST version for frontend)
+    """
     try:
-        logger.info("Generating Instagram OAuth URL")
-        logger.debug("Request headers: %s", dict(request.headers))
+        logger.info("Handling Instagram OAuth callback (POST)")
+        logger.debug("Callback data: %s", {
+            'code': '***' if callback_data.code else None,
+            'state': callback_data.state
+        })
         
-        # Get origin for dynamic redirect URI
-        origin = request.headers.get('origin')
-        if not origin:
-            logger.error("❌ No origin header in request")
-            raise HTTPException(status_code=400, detail="Missing origin header")
-        
-        logger.debug("Request origin: %s", origin)
-        
-        # Get business name from query params
-        business_name = request.query_params.get('business_name', '')
-        logger.debug("Business name from query: %s", business_name)
-        
-        # Build redirect URI
-        redirect_uri = f"{origin}/auth/instagram/callback"
-        logger.debug("Constructed redirect URI: %s", redirect_uri)
-        
-        # Get authorization URL
-        try:
-            auth_url, state = get_instagram_auth_url(redirect_uri, business_name)
-            logger.info("✅ Successfully generated Instagram OAuth URL")
-            logger.debug("Auth URL: %s", auth_url)
-            logger.debug("State token: %s", state)
-            
-            return AuthResponse(auth_url=auth_url, state=state)
-        except Exception as e:
-            logger.error("❌ Failed to get Instagram authorization URL: %s", str(e), exc_info=True)
+        # Validate required parameters
+        if not callback_data.code or not callback_data.state:
+            logger.error("❌ Missing required parameters: code=%s, state=%s", 
+                        bool(callback_data.code), bool(callback_data.state))
             raise HTTPException(
-                status_code=500,
-                detail=f"Failed to get Instagram authorization URL: {str(e)}"
+                status_code=400,
+                detail="Missing required parameters: code and state are required"
             )
+        
+        try:
+            # Exchange code for token
+            logger.info("Exchanging authorization code for token")
+            token_data = instagram_oauth.exchange_code_for_token(callback_data.code, callback_data.state)
+            
+            if not token_data:
+                logger.error("❌ Failed to exchange code for token - no data returned")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to exchange authorization code for token"
+                )
+            
+            logger.info("✅ Successfully exchanged code for token")
+            
+            # Get database connection
+            db = await get_database()
+            
+            # Store tokens in database
+            if token_data.get('instagram_accounts'):
+                account = token_data['instagram_accounts'][0]  # Use first account
+                await db.store_instagram_tokens(
+                    account['id'],
+                    account['access_token'],
+                    account
+                )
+            
+            # Create response
+            response = TokenResponse(
+                success=True,
+                token=token_data.get('access_token', ''),
+                user={
+                    'id': token_data.get('instagram_accounts', [{}])[0].get('id', ''),
+                    'instagram_handle': token_data.get('instagram_accounts', [{}])[0].get('username', ''),
+                    'instagram_connected': True
+                },
+                instagram_handle=token_data.get('instagram_accounts', [{}])[0].get('username', '')
+            )
+            
+            return response
+            
+        except ValueError as e:
+            logger.error("❌ Token exchange failed: %s", str(e), exc_info=True)
+            raise HTTPException(status_code=400, detail=str(e))
             
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("❌ Unexpected error in get_instagram_oauth_url: %s", str(e), exc_info=True)
+        logger.error("❌ Unexpected error in instagram_callback_post: %s", str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
 
-@router.get("/instagram/callback", response_model=TokenResponse)
+@router.get("/instagram/callback")
 async def instagram_oauth_callback(
     code: str,
     state: str,
@@ -124,9 +151,9 @@ async def instagram_oauth_callback(
     error_reason: Optional[str] = None,
     error_description: Optional[str] = None
 ):
-    """Handle Instagram OAuth callback"""
+    """Handle Instagram OAuth callback (GET version for direct redirects)"""
     try:
-        logger.info("Handling Instagram OAuth callback")
+        logger.info("Handling Instagram OAuth callback (GET)")
         logger.debug("Callback parameters: %s", {
             'code': '***' if code else None,
             'state': state,
@@ -146,40 +173,9 @@ async def instagram_oauth_callback(
             logger.error("❌ %s", error_msg)
             raise HTTPException(status_code=400, detail=error_msg)
         
-        # Validate required parameters
-        if not code or not state:
-            logger.error("❌ Missing required parameters: code=%s, state=%s", bool(code), bool(state))
-            raise HTTPException(
-                status_code=400,
-                detail="Missing required parameters: code and state are required"
-            )
-        
-        try:
-            # Exchange code for token
-            logger.info("Exchanging authorization code for token")
-            token_data = instagram_oauth.exchange_code_for_token(code, state)
-            
-            if not token_data:
-                logger.error("❌ Failed to exchange code for token - no data returned")
-                raise HTTPException(
-                    status_code=500,
-                    detail="Failed to exchange authorization code for token"
-                )
-            
-            logger.info("✅ Successfully exchanged code for token")
-            logger.debug("Token data: %s", {
-                **token_data,
-                'access_token': '***',
-                'instagram_accounts': [
-                    {**acc, 'access_token': '***'} for acc in token_data.get('instagram_accounts', [])
-                ]
-            })
-            
-            return TokenResponse(**token_data)
-            
-        except ValueError as e:
-            logger.error("❌ Token exchange failed: %s", str(e), exc_info=True)
-            raise HTTPException(status_code=400, detail=str(e))
+        # Use the same logic as POST version
+        callback_data = CallbackRequest(code=code, state=state)
+        return await instagram_callback_post(callback_data)
             
     except HTTPException:
         raise

@@ -17,6 +17,14 @@ from cryptography.fernet import Fernet
 
 from config import settings
 
+# Import Azure Key Vault functions
+try:
+    from azure_keyvault import get_secret
+except ImportError:
+    def get_secret(secret_name: str, default: Optional[str] = None) -> Optional[str]:
+        """Fallback function if Azure Key Vault is not available"""
+        return os.getenv(secret_name.upper().replace('-', '_'), default)
+
 # Configure detailed logging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -40,6 +48,11 @@ class InstagramOAuth:
             self.graph_api_version = settings.META_GRAPH_API_VERSION
             self.base_url = f"https://graph.facebook.com/{self.graph_api_version}"
             self.redirect_uri = settings.META_REDIRECT_URI
+            
+            # JWT settings
+            self.jwt_secret_key = settings.JWT_SECRET
+            self.jwt_algorithm = settings.JWT_ALGORITHM
+            self.jwt_expiration_hours = 24  # Default 24 hours
             
             # Validate required settings
             if not self.app_id or not self.app_secret:
@@ -387,19 +400,19 @@ class InstagramOAuth:
             'user_id': user_data.get('id'),
             'username': user_data.get('username'),
             'tenant_id': tenant_id,
-            'exp': datetime.utcnow() + timedelta(hours=settings.jwt_expiration_hours),
+            'exp': datetime.utcnow() + timedelta(hours=self.jwt_expiration_hours),
             'iat': datetime.utcnow(),
             'iss': 'ig-shop-agent'
         }
         
-        secret_key = get_secret('jwt-secret-key') or settings.jwt_secret_key
-        return jwt.encode(payload, secret_key, algorithm=settings.jwt_algorithm)
+        secret_key = get_secret('jwt-secret-key') or self.jwt_secret_key
+        return jwt.encode(payload, secret_key, algorithm=self.jwt_algorithm)
     
     def verify_jwt_token(self, token: str) -> Optional[Dict]:
         """Verify and decode JWT token"""
         try:
-            secret_key = get_secret('jwt-secret-key') or settings.jwt_secret_key
-            payload = jwt.decode(token, secret_key, algorithms=[settings.jwt_algorithm])
+            secret_key = get_secret('jwt-secret-key') or self.jwt_secret_key
+            payload = jwt.decode(token, secret_key, algorithms=[self.jwt_algorithm])
             return payload
         except jwt.ExpiredSignatureError:
             logger.warning("JWT token has expired")
@@ -416,7 +429,7 @@ def get_instagram_auth_url(redirect_uri: str = None, business_name: str = "") ->
     return instagram_oauth.get_authorization_url(redirect_uri, business_name)
 
 def handle_oauth_callback(code: str, state: str) -> Optional[Dict]:
-    """Handle OAuth callback and return authentication data"""
+    """Handle OAuth callback"""
     return instagram_oauth.exchange_code_for_token(code, state)
 
 def validate_instagram_token(access_token: str) -> bool:
@@ -424,9 +437,20 @@ def validate_instagram_token(access_token: str) -> bool:
     return instagram_oauth.validate_token(access_token)
 
 def generate_session_token(user_data: Dict, tenant_id: str) -> str:
-    """Generate session JWT token"""
+    """Generate session token"""
     return instagram_oauth.generate_jwt_token(user_data, tenant_id)
 
 def verify_session_token(token: str) -> Optional[Dict]:
-    """Verify session JWT token"""
-    return instagram_oauth.verify_jwt_token(token) 
+    """Verify session token"""
+    return instagram_oauth.verify_jwt_token(token)
+
+# Export for convenience
+__all__ = [
+    "InstagramOAuth",
+    "instagram_oauth", 
+    "get_instagram_auth_url",
+    "handle_oauth_callback",
+    "validate_instagram_token",
+    "generate_session_token",
+    "verify_session_token"
+] 
