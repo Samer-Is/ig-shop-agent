@@ -134,27 +134,32 @@ async def instagram_login():
             "status": "service_unavailable"
         }
     
-    # Generate OAuth URL
+    # Generate OAuth URL with state for CSRF protection
+    import secrets
+    state = secrets.token_urlsafe(32)
+    
     redirect_uri = "https://igshop-api.azurewebsites.net/auth/instagram/callback"
     scope = "user_profile,user_media,instagram_basic"
     
-    oauth_url = (
+    auth_url = (
         f"https://api.instagram.com/oauth/authorize"
         f"?client_id={meta_app_id}"
         f"&redirect_uri={redirect_uri}"
         f"&scope={scope}"
         f"&response_type=code"
+        f"&state={state}"
     )
     
     return {
-        "oauth_url": oauth_url,
+        "auth_url": auth_url,
+        "state": state,
         "redirect_uri": redirect_uri,
         "app_id": meta_app_id,
         "status": "ready"
     }
 
 @app.get("/auth/instagram/callback")
-async def instagram_callback(code: str = None, error: str = None):
+async def instagram_callback(code: str = None, state: str = None, error: str = None):
     """Instagram OAuth callback endpoint"""
     if error:
         return {
@@ -170,11 +175,63 @@ async def instagram_callback(code: str = None, error: str = None):
             "status": "failed"
         }
     
+    if not state:
+        return {
+            "error": "missing_state",
+            "message": "State parameter not provided",
+            "status": "failed"
+        }
+    
     return {
         "code": code,
+        "state": state,
         "message": "Authorization code received successfully",
         "status": "success",
         "next_step": "Exchange code for access token"
+    }
+
+@app.post("/auth/instagram/callback")
+async def instagram_callback_post(request_data: dict):
+    """Instagram OAuth callback endpoint (POST)"""
+    code = request_data.get("code")
+    state = request_data.get("state")
+    error = request_data.get("error")
+    
+    if error:
+        return {
+            "error": error,
+            "message": "Instagram OAuth authorization failed",
+            "status": "failed"
+        }
+    
+    if not code:
+        return {
+            "error": "missing_code",
+            "message": "Authorization code not provided",
+            "status": "failed"
+        }
+    
+    if not state:
+        return {
+            "error": "missing_state",
+            "message": "State parameter not provided",
+            "status": "failed"
+        }
+    
+    # TODO: Validate state parameter against stored value
+    # TODO: Exchange code for access token
+    # TODO: Get user profile from Instagram
+    # TODO: Store user data in database
+    
+    return {
+        "token": "placeholder_token",
+        "user": {
+            "id": 1,
+            "instagram_handle": "placeholder_handle",
+            "instagram_connected": True
+        },
+        "message": "Instagram authentication successful",
+        "status": "success"
     }
 
 # Global exception handler
