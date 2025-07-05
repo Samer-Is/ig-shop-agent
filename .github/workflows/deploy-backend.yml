@@ -185,38 +185,76 @@ jobs:
           echo "❌ SCM site is not accessible - this explains the 503 error"
         fi
     
-    - name: Ensure Web App is Running
+    - name: Aggressive Service Recovery
       run: |
-        echo "🔄 Ensuring Web App is started: ${{ env.APP_NAME }}"
+        echo "🚨 Implementing aggressive service recovery for: ${{ env.APP_NAME }}"
         
-        # Stop the web app first (to clear any stuck processes)
-        echo "🛑 Stopping Web App to clear any issues..."
+        # First, try to restart the App Service Plan itself
+        echo "🔄 Restarting App Service Plan..."
+        az appservice plan update \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name igshop-api-plan \
+          --sku B1 \
+          --number-of-workers 1
+        
+        # Stop the web app completely
+        echo "🛑 Stopping Web App completely..."
         az webapp stop \
           --resource-group ${{ env.RESOURCE_GROUP }} \
           --name ${{ env.APP_NAME }}
         
-        # Wait for stop to complete
-        sleep 15
+        # Wait for complete stop
+        sleep 30
         
-        # Start the web app
-        echo "▶️ Starting Web App..."
+        # Reset web app configuration to defaults
+        echo "🔧 Resetting Web App configuration..."
+        az webapp config set \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name ${{ env.APP_NAME }} \
+          --linux-fx-version "PYTHON|3.12" \
+          --startup-file "uvicorn app:app --host 0.0.0.0 --port 8000" \
+          --always-on false
+        
+        # Clear any stuck deployment slots
+        echo "🧹 Clearing deployment slots..."
+        az webapp deployment slot list \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --name ${{ env.APP_NAME }} \
+          --output table || echo "No slots to clear"
+        
+        # Start the web app with fresh configuration
+        echo "▶️ Starting Web App with fresh configuration..."
         az webapp start \
           --resource-group ${{ env.RESOURCE_GROUP }} \
           --name ${{ env.APP_NAME }}
         
         echo "✅ Web App start command completed"
         
-        # Wait for service to be ready
-        echo "⏳ Waiting for service to be ready..."
-        sleep 45
+        # Wait longer for service to be completely ready
+        echo "⏳ Waiting for service to be completely ready..."
+        sleep 60
         
         # Verify the app is running
         echo "🔍 Verifying Web App is running..."
         az webapp show \
           --resource-group ${{ env.RESOURCE_GROUP }} \
           --name ${{ env.APP_NAME }} \
-          --query "{name:name,state:state}" \
+          --query "{name:name,state:state,hostNames:hostNames}" \
           --output table
+        
+        # Test SCM site accessibility after restart
+        echo "🔍 Testing SCM site accessibility after restart..."
+        SCM_URL="https://${{ env.APP_NAME }}.scm.azurewebsites.net"
+        for i in {1..5}; do
+          echo "Attempt $i/5: Testing SCM site..."
+          if curl -I -s -f "$SCM_URL" --max-time 30; then
+            echo "✅ SCM site is now accessible"
+            break
+          else
+            echo "❌ SCM site still not accessible, waiting 30s..."
+            sleep 30
+          fi
+        done
     
     - name: Deploy to Azure Web App
       run: |
@@ -271,13 +309,44 @@ jobs:
             ls -lh minimal_deployment.zip
             
             # Try with minimal package
-            az webapp deployment source config-zip \
+            if az webapp deployment source config-zip \
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --name ${{ env.APP_NAME }} \
               --src minimal_deployment.zip \
-              --timeout 600
-            
-            echo "✅ Minimal deployment completed"
+              --timeout 600; then
+              echo "✅ Minimal deployment completed"
+            else
+              echo "❌ All deployment methods failed. SCM service appears to be completely down."
+              echo "🔍 Final diagnostics..."
+              
+              # Show detailed app status
+              az webapp show \
+                --resource-group ${{ env.RESOURCE_GROUP }} \
+                --name ${{ env.APP_NAME }} \
+                --output json | jq '{name, state, hostNames, kind, repositorySiteName, availabilityState}'
+              
+              # Check if we can at least reach the main site
+              MAIN_URL="https://${{ env.APP_NAME }}.azurewebsites.net"
+              echo "🔍 Testing main site accessibility..."
+              if curl -I -s -f "$MAIN_URL" --max-time 30; then
+                echo "✅ Main site is accessible - SCM service specific issue"
+              else
+                echo "❌ Main site also not accessible - complete service failure"
+              fi
+              
+              # Try to get deployment logs
+              echo "🔍 Checking recent deployment logs..."
+              az webapp log deployment list \
+                --resource-group ${{ env.RESOURCE_GROUP }} \
+                --name ${{ env.APP_NAME }} \
+                --output table || echo "Could not retrieve deployment logs"
+              
+              echo "💡 Recommendation: The Azure Web App SCM service appears to be experiencing issues."
+              echo "💡 This may require manual intervention in the Azure Portal or Azure Support."
+              echo "💡 Check: https://status.azure.com for any known service issues."
+              
+              exit 1
+            fi
           fi
         fi
 
