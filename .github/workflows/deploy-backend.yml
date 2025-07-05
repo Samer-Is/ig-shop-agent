@@ -47,7 +47,7 @@ jobs:
         
         # Use the correct web app name with unique string
         if [ "$ENV" = "dev" ]; then
-          echo "APP_NAME=igshop-dev-yjhtoi-api" >> $GITHUB_ENV
+          echo "APP_NAME=igshop-api" >> $GITHUB_ENV
           echo "RESOURCE_GROUP=igshop-dev-rg-v2" >> $GITHUB_ENV
           echo "KEYVAULT_NAME=igshop-dev-yjhtoi-kv" >> $GITHUB_ENV
         elif [ "$ENV" = "staging" ]; then

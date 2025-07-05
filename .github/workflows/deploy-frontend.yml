@@ -74,7 +74,7 @@ jobs:
           
           # Set backend API URL based on environment - use correct Azure web app names
           if [ "${{ env.ENVIRONMENT }}" = "dev" ]; then
-            echo "VITE_API_BASE_URL=https://igshop-dev-yjhtoi-api.azurewebsites.net" > .env.production
+            echo "VITE_API_BASE_URL=https://igshop-api.azurewebsites.net" > .env.production
           elif [ "${{ env.ENVIRONMENT }}" = "staging" ]; then
             echo "VITE_API_BASE_URL=https://igshop-staging-api.azurewebsites.net" > .env.production
           else
