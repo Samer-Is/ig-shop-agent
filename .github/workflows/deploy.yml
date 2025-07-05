@@ -79,14 +79,11 @@ jobs:
       with:
         version: 8
     
-    - name: Install dependencies
+    - name: Install dependencies and build
       run: |
         cd ig-shop-agent-dashboard
+        # Install dependencies
         pnpm install
-    
-    - name: Build application with correct environment
-      run: |
-        cd ig-shop-agent-dashboard
         # Create production environment file
         echo "VITE_API_BASE_URL=https://igshop-api.azurewebsites.net" > .env.production
         echo "VITE_ENVIRONMENT=production" >> .env.production
@@ -104,7 +101,5 @@ jobs:
         azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         action: "upload"
-        app_location: "ig-shop-agent-dashboard"
-        app_build_command: "VITE_API_BASE_URL=https://igshop-api.azurewebsites.net VITE_ENVIRONMENT=production pnpm run build"
-        output_location: "dist"
-        skip_app_build: false 
+        app_location: "ig-shop-agent-dashboard/dist"
+        skip_app_build: true 
