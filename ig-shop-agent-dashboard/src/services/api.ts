@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// CRITICAL: Force cache clear - Updated 2024-12-19 16:50
+// ULTIMATE EMERGENCY FIX: Force complete cache invalidation - 2024-12-19 17:15
 const API_BASE_URL = 'https://igshop-api.azurewebsites.net';
 
 const api = axios.create({
