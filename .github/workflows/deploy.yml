@@ -41,7 +41,6 @@ jobs:
       with:
         app-name: 'igshop-api'
         package: '.'
-        clean: true
     
     - name: Configure Web App Settings
       run: |
@@ -133,12 +132,17 @@ jobs:
         echo "🔍 DEBUG: Final dist directory contents:"
         ls -la dist/
     
-    - name: Deploy to Azure Static Web Apps
+    - name: Deploy to Azure Static Web Apps (NUCLEAR REBUILD)
       uses: Azure/static-web-apps-deploy@v1
       with:
         azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         action: "upload"
-        app_location: "ig-shop-agent-dashboard/dist"
-        skip_app_build: true
-        production_branch: "production-deployment" 
+        app_location: "ig-shop-agent-dashboard"
+        api_location: ""
+        output_location: "dist"
+        skip_app_build: false
+        production_branch: "production-deployment"
+      env:
+        VITE_API_BASE_URL: https://igshop-api.azurewebsites.net
+        VITE_ENVIRONMENT: production 
