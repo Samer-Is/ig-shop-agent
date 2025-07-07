@@ -40,7 +40,7 @@ class Settings:
         self.META_APP_ID: str = os.getenv("META_APP_ID", "")
         self.META_APP_SECRET: str = os.getenv("META_APP_SECRET", "")
         self.META_GRAPH_API_VERSION: str = "v18.0"
-        self.META_REDIRECT_URI: str = os.getenv("META_REDIRECT_URI", "https://red-island-0b863450f.2.azurestaticapps.net/auth/callback")
+        self.META_REDIRECT_URI: str = os.getenv("META_REDIRECT_URI", "https://red-island-0b863450f.2.azurestaticapps.net/login")
         
         # OpenAI Configuration
         self.OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")

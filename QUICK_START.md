@@ -14,7 +14,7 @@ Visit: **https://red-island-0b863450f.2.azurestaticapps.net**
 
 ### 2. API Endpoints Fixed ✅
 The frontend now points to the correct backend:
-- **Production URL**: `igshop-dev-yjhtoi-api.azurewebsites.net`
+- **Production URL**: `igshop-api.azurewebsites.net`
 - **Development URL**: `localhost:8000`
 
 ### 3. Real Instagram OAuth Ready ✅
@@ -53,7 +53,7 @@ OpenAI configured with:
 - ✅ All dependencies in requirements.txt
 - ✅ Azure Web App target configured
 
-**DEPLOYMENT URL:** `igshop-dev-yjhtoi-api.azurewebsites.net`
+**DEPLOYMENT URL:** `igshop-api.azurewebsites.net`
 
 ## 🎯 IMMEDIATE NEXT STEPS:
 
