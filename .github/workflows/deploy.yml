@@ -122,6 +122,11 @@ jobs:
           grep -o "https://[^\"']*igshop[^\"']*" "$file" || echo "No igshop URLs found"
         done
         
+        # Force cache busting by adding timestamp
+        echo "🔍 DEBUG: Adding cache busting timestamp..."
+        echo "BUILD_TIME=$(date +%s)" >> .env
+        cat .env
+        
         # Copy staticwebapp.config.json to dist folder
         cp public/staticwebapp.config.json dist/
         echo "🔍 DEBUG: Configuration file copied to dist folder"
@@ -135,4 +140,5 @@ jobs:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         action: "upload"
         app_location: "ig-shop-agent-dashboard/dist"
-        skip_app_build: true 
+        skip_app_build: true
+        production_branch: "production-deployment" 
