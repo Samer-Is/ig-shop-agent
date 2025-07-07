@@ -21,7 +21,7 @@ class Settings:
         self.API_PORT: int = int(os.getenv("API_PORT", "8000"))
         
         # Frontend URL (for CORS and redirects)
-        self.FRONTEND_URL: str = os.getenv("FRONTEND_URL", "https://red-island-0b863450f.2.azurestaticapps.net")
+        self.FRONTEND_URL: str = os.getenv("FRONTEND_URL", "https://proud-rock-0d57f940f.2.azurestaticapps.net")
         
         # Database Configuration (PostgreSQL)
         self.DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/igshop")
@@ -40,7 +40,7 @@ class Settings:
         self.META_APP_ID: str = os.getenv("META_APP_ID", "")
         self.META_APP_SECRET: str = os.getenv("META_APP_SECRET", "")
         self.META_GRAPH_API_VERSION: str = "v18.0"
-        self.META_REDIRECT_URI: str = os.getenv("META_REDIRECT_URI", "https://red-island-0b863450f.2.azurestaticapps.net/login")
+        self.META_REDIRECT_URI: str = os.getenv("META_REDIRECT_URI", "https://proud-rock-0d57f940f.2.azurestaticapps.net/login")
         
         # OpenAI Configuration
         self.OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
@@ -83,6 +83,7 @@ class Settings:
         # CORS Configuration
         self.CORS_ORIGINS: list = [
             "https://red-island-0b863450f.2.azurestaticapps.net",
+            "https://proud-rock-0d57f940f.2.azurestaticapps.net",  # Emergency frontend URL
             "http://localhost:3000",
             "http://localhost:5173",
             "http://127.0.0.1:5173"
