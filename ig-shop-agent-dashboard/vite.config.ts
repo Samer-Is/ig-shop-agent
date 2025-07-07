@@ -17,12 +17,11 @@ export default defineConfig({
     // Optimize build output for Azure Static Web Apps
     rollupOptions: {
       output: {
-        // Force fresh build - clear all caches
+        // CRITICAL: Force new file names with timestamp for cache busting
         manualChunks: undefined,
-        // Use shorter names for chunks
-        chunkFileNames: 'assets/[name]-[hash].js',
-        entryFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]'
+        chunkFileNames: `assets/[name]-${Date.now()}-[hash].js`,
+        entryFileNames: `assets/[name]-${Date.now()}-[hash].js`,
+        assetFileNames: `assets/[name]-${Date.now()}-[hash].[ext]`
       }
     },
     // Minimize CSS and JS
