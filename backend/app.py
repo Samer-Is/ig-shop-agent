@@ -18,7 +18,7 @@ from database import get_database, init_database
 
 # Import routers
 try:
-    from routers import auth, conversations, orders, catalog, kb
+    from routers import auth, conversations, orders, catalog, kb, webhook
     routers_imported = True
     import_error = None
 except Exception as e:
@@ -71,6 +71,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+if routers_imported:
+    try:
+        app.include_router(webhook.router)
+        logger.info("✅ Webhook router included successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to include webhook router: {e}")
 
 # Health check endpoint
 @app.get("/health")
