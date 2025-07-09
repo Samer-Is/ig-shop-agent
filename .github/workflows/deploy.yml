@@ -58,7 +58,7 @@ jobs:
             SCM_DO_BUILD_DURING_DEPLOYMENT=true \
             ENABLE_ORYX_BUILD=true \
             PYTHONPATH=/home/site/wwwroot:/home/site/wwwroot/backend \
-            META_APP_ID=1879578119651644 \
+            META_APP_ID=1209836027286065 \
             META_APP_SECRET=f79b3350f43751d6139e1b29a232cbf3 \
             META_REDIRECT_URI=https://proud-rock-0d57f940f.2.azurestaticapps.net/login \
             META_WEBHOOK_VERIFY_TOKEN=igshop_webhook_verify_X_urON9ELnFHYIlEeRNZa8b2FXB-q5JamBwTOrHvV5M \
