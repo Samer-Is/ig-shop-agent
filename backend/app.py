@@ -84,7 +84,7 @@ if routers_imported:
         app.include_router(webhook.router)
         
         # NEW: /backend-api/ routes to avoid Azure SWA conflicts
-        app.include_router(analytics.router, prefix="/backend-api/analytics")
+        # Note: Analytics handled by direct route above to avoid router conflicts
         app.include_router(auth.router, prefix="/backend-api/auth")
         app.include_router(conversations.router, prefix="/backend-api/conversations")
         app.include_router(orders.router, prefix="/backend-api/orders")
@@ -96,6 +96,31 @@ if routers_imported:
         logger.error(f"❌ Failed to include routers: {e}")
 else:
     logger.error(f"❌ Routers not imported due to error: {import_error}")
+
+# Add direct backend-api routes to avoid router conflicts
+@app.get("/backend-api/analytics")
+async def backend_analytics():
+    """Backend API analytics endpoint - proxy to analytics router"""
+    try:
+        from routers.analytics import get_analytics
+        from database import get_database
+        
+        # Get database connection
+        db = await get_database()
+        
+        # Call the analytics function directly
+        result = await get_analytics(db)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Backend analytics error: {e}")
+        return {
+            "orders": {"total": 0, "revenue": 0.0, "average_value": 0.0, "pending": 0, "completed": 0},
+            "catalog": {"total_products": 0, "active_products": 0, "out_of_stock": 0},
+            "conversations": {"total_messages": 0, "ai_responses": 0, "customer_messages": 0},
+            "recent_orders": []
+        }
 
 # Health check endpoint
 @app.get("/health")
