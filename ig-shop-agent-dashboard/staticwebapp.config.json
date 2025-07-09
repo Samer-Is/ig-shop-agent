@@ -1,14 +1,8 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/assets/*.{png,jpg,gif,ico,svg,js,css}", "/api/*"]
+    "exclude": ["/assets/*.{png,jpg,gif,ico,svg,js,css}"]
   },
-  "routes": [
-    {
-      "route": "/api/*",
-      "allowedRoles": ["anonymous"]
-    }
-  ],
   "mimeTypes": {
     ".json": "application/json",
     ".js": "application/javascript",
