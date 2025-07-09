@@ -18,7 +18,7 @@ from database import get_database, init_database
 
 # Import routers
 try:
-    from routers import auth, conversations, orders, catalog, kb, webhook
+    from routers import auth, conversations, orders, catalog, kb, webhook, analytics
     routers_imported = True
     import_error = None
 except Exception as e:
@@ -75,10 +75,30 @@ app.add_middleware(
 # Include routers
 if routers_imported:
     try:
+        app.include_router(analytics.router, prefix="/api/analytics")
+        logger.info("✅ Analytics router included successfully")
+        
+        app.include_router(auth.router, prefix="/api")
+        logger.info("✅ Auth router included successfully")
+        
+        app.include_router(conversations.router, prefix="/api/conversations")
+        logger.info("✅ Conversations router included successfully")
+        
+        app.include_router(orders.router, prefix="/api/orders")
+        logger.info("✅ Orders router included successfully")
+        
+        app.include_router(catalog.router, prefix="/api/catalog")
+        logger.info("✅ Catalog router included successfully")
+        
+        app.include_router(kb.router, prefix="/api/kb")
+        logger.info("✅ Knowledge Base router included successfully")
+        
         app.include_router(webhook.router)
         logger.info("✅ Webhook router included successfully")
     except Exception as e:
-        logger.error(f"❌ Failed to include webhook router: {e}")
+        logger.error(f"❌ Failed to include routers: {e}")
+else:
+    logger.error(f"❌ Routers not imported due to error: {import_error}")
 
 # Health check endpoint
 @app.get("/health")
@@ -136,7 +156,15 @@ async def root():
             "endpoints": {
                 "health": "/health",
                 "debug": "/debug/filesystem",
-                "auth": "/auth/instagram/login"
+                "auth": "/auth/instagram/login",
+                "api": {
+                    "analytics": "/api/analytics",
+                    "conversations": "/api/conversations",
+                    "orders": "/api/orders",
+                    "catalog": "/api/catalog",
+                    "knowledge_base": "/api/kb",
+                    "authentication": "/api/auth"
+                }
             }
         }
     except Exception as e:
@@ -326,16 +354,6 @@ async def instagram_callback_direct(request: dict):
             "message": str(e),
             "status": "error"
         }
-
-# Include routers only if they were imported successfully
-if routers_imported:
-    app.include_router(auth.router, tags=["Authentication"])
-    app.include_router(conversations.router, prefix="/conversations", tags=["Conversations"])
-    app.include_router(orders.router, prefix="/orders", tags=["Orders"])
-    app.include_router(catalog.router, prefix="/catalog", tags=["Catalog"])
-    app.include_router(kb.router, prefix="/kb", tags=["Knowledge Base"])
-else:
-    logger.error("❌ Routers not imported - endpoints will not be available")
 
 # Global exception handler
 @app.exception_handler(Exception)
