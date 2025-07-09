@@ -125,31 +125,33 @@ class InstagramOAuth:
                 'business_name': business_name
             }
             
-            # Required Instagram Business Login scopes
+            # Required Instagram Business Login scopes (from Meta's embed URL)
             scopes = [
                 'instagram_business_basic',
-                'instagram_business_manage_messages',
+                'instagram_business_manage_messages', 
+                'instagram_business_manage_comments',
                 'instagram_business_content_publish',
-                'instagram_business_manage_comments'
+                'instagram_business_manage_insights'
             ]
             logger.debug("Using Instagram Business Login scopes: %s", scopes)
             
-            # Build authorization URL with proper encoding
+            # Build authorization URL with proper encoding (Meta's format)
             auth_params = {
+                'force_reauth': 'true',
                 'client_id': self.app_id,
                 'redirect_uri': redirect_uri or self.redirect_uri,
-                'scope': ','.join(scopes),
                 'response_type': 'code',
+                'scope': ','.join(scopes),
                 'state': state
             }
             
-            # Use Instagram Business Login endpoint instead of Facebook
-            auth_url = f"https://api.instagram.com/oauth/authorize?" + "&".join([
+            # Use Instagram Business Login endpoint (Meta's domain)
+            auth_url = f"https://www.instagram.com/oauth/authorize?" + "&".join([
                 f"{key}={requests.utils.quote(str(value))}" 
                 for key, value in auth_params.items()
             ])
             
-            logger.info("✅ Generated Instagram OAuth URL: %s", auth_url)
+            logger.info("✅ Generated Instagram Business Login URL: %s", auth_url)
             logger.debug("Auth parameters: %s", auth_params)
             
             return auth_url, state
