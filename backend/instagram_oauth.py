@@ -125,18 +125,14 @@ class InstagramOAuth:
                 'business_name': business_name
             }
             
-            # Required Instagram OAuth scopes for business functionality
+            # Required Instagram Business Login scopes
             scopes = [
-                'instagram_basic',
-                'instagram_manage_messages',
-                'instagram_content_publish',
-                'instagram_manage_insights',
-                'pages_messaging',
-                'pages_show_list',
-                'pages_manage_metadata',
-                'pages_read_engagement'
+                'instagram_business_basic',
+                'instagram_business_manage_messages',
+                'instagram_business_content_publish',
+                'instagram_business_manage_comments'
             ]
-            logger.debug("Using OAuth scopes: %s", scopes)
+            logger.debug("Using Instagram Business Login scopes: %s", scopes)
             
             # Build authorization URL with proper encoding
             auth_params = {
@@ -147,7 +143,8 @@ class InstagramOAuth:
                 'state': state
             }
             
-            auth_url = f"https://www.facebook.com/{self.graph_api_version}/dialog/oauth?" + "&".join([
+            # Use Instagram Business Login endpoint instead of Facebook
+            auth_url = f"https://api.instagram.com/oauth/authorize?" + "&".join([
                 f"{key}={requests.utils.quote(str(value))}" 
                 for key, value in auth_params.items()
             ])
@@ -182,12 +179,13 @@ class InstagramOAuth:
                 del self._oauth_states[state]
                 raise ValueError("OAuth state has expired")
             
-            # Exchange code for token
-            token_url = f"{self.base_url}/oauth/access_token"
+            # Exchange code for token using Instagram API
+            token_url = "https://api.instagram.com/oauth/access_token"
             token_data = {
                 'client_id': self.app_id,
                 'client_secret': self.app_secret,
                 'redirect_uri': state_data['redirect_uri'],
+                'grant_type': 'authorization_code',
                 'code': code
             }
             
@@ -201,53 +199,66 @@ class InstagramOAuth:
             try:
                 response.raise_for_status()
                 token_info = response.json()
-                logger.debug("Token exchange response: %s", {
+                logger.debug("Instagram token exchange response: %s", {
                     **token_info,
                     'access_token': '***' if 'access_token' in token_info else None
                 })
             except Exception as e:
-                logger.error("❌ Token exchange request failed: %s", str(e))
+                logger.error("❌ Instagram token exchange request failed: %s", str(e))
                 logger.error("Response content: %s", response.text)
                 raise
-            
+
             if 'access_token' not in token_info:
                 logger.error("❌ No access token in response: %s", token_info)
-                raise ValueError("Failed to get access token from Facebook")
-            
-            # Get long-lived token
-            logger.info("Getting long-lived token...")
-            long_lived_token = self._get_long_lived_token(token_info['access_token'])
+                raise ValueError("Failed to get access token from Instagram")
+
+            # For Instagram Business Login, we get Instagram User access token directly
+            # The response includes: access_token, user_id, permissions
+            instagram_access_token = token_info['access_token']
+            instagram_user_id = token_info.get('user_id')
+
+            logger.info("✅ Received Instagram User access token for user ID: %s", instagram_user_id)
+
+            # Exchange for long-lived Instagram token
+            logger.info("Getting long-lived Instagram token...")
+            long_lived_token = self._get_long_lived_instagram_token(instagram_access_token)
             if not long_lived_token:
-                raise ValueError("Failed to get long-lived token")
-            
-            # Get user Instagram accounts
-            logger.info("Getting Instagram accounts...")
-            instagram_accounts = self._get_instagram_accounts(long_lived_token['access_token'])
-            if not instagram_accounts:
-                raise ValueError("No Instagram business accounts found")
-            
+                # If long-lived token exchange fails, use the short-lived token
+                logger.warning("⚠️ Failed to get long-lived token, using short-lived token")
+                long_lived_token = {
+                    'access_token': instagram_access_token,
+                    'token_type': 'bearer',
+                    'expires_in': 3600  # 1 hour for short-lived tokens
+                }
+
+            # Get Instagram user profile information
+            logger.info("Getting Instagram user profile...")
+            user_profile = self._get_instagram_user_profile(long_lived_token['access_token'])
+            if not user_profile:
+                raise ValueError("Failed to get Instagram user profile")
+
             # Cleanup state
             del self._oauth_states[state]
-            
-            # Return complete authentication data
+
+            # Return Instagram authentication data
             auth_data = {
                 'access_token': long_lived_token['access_token'],
                 'expires_in': long_lived_token.get('expires_in', 3600),
                 'token_type': long_lived_token.get('token_type', 'bearer'),
-                'instagram_accounts': instagram_accounts,
+                'user_id': instagram_user_id,
+                'username': user_profile.get('username'),
+                'name': user_profile.get('name'),
+                'account_type': user_profile.get('account_type'),
                 'business_name': state_data.get('business_name', ''),
                 'authenticated_at': datetime.utcnow().isoformat()
             }
-            
-            logger.info("✅ Instagram OAuth successful for %d accounts", len(instagram_accounts))
+
+            logger.info("✅ Instagram Business Login successful for user: %s", user_profile.get('username'))
             logger.debug("Auth data: %s", {
                 **auth_data,
-                'access_token': '***',
-                'instagram_accounts': [
-                    {**acc, 'access_token': '***'} for acc in instagram_accounts
-                ]
+                'access_token': '***'
             })
-            
+
             return auth_data
             
         except RequestException as e:
@@ -257,112 +268,69 @@ class InstagramOAuth:
             logger.error("❌ Unexpected error during token exchange: %s", str(e), exc_info=True)
             raise ValueError(f"Authentication failed: {str(e)}")
     
-    def _get_long_lived_token(self, short_lived_token: str) -> Optional[Dict]:
-        """Exchange short-lived token for long-lived token"""
+    def _get_long_lived_instagram_token(self, short_lived_token: str) -> Optional[Dict]:
+        """Exchange short-lived Instagram token for long-lived token"""
         try:
-            logger.info("Exchanging short-lived token for long-lived token")
-            url = f"{self.base_url}/oauth/access_token"
+            logger.info("Exchanging short-lived Instagram token for long-lived token")
+            url = "https://graph.instagram.com/access_token"
             params = {
-                'grant_type': 'fb_exchange_token',
-                'client_id': self.app_id,
+                'grant_type': 'ig_exchange_token',
                 'client_secret': self.app_secret,
-                'fb_exchange_token': short_lived_token
+                'access_token': short_lived_token
             }
             
-            logger.debug("Making long-lived token request to: %s", url)
-            logger.debug("Request params: %s", {**params, 'client_secret': '***', 'fb_exchange_token': '***'})
+            logger.debug("Making long-lived Instagram token request to: %s", url)
+            logger.debug("Request params: %s", {**params, 'client_secret': '***', 'access_token': '***'})
             
             response = requests.get(url, params=params, timeout=10)
-            logger.debug("Long-lived token response status: %d", response.status_code)
+            logger.debug("Long-lived Instagram token response status: %d", response.status_code)
             
             try:
                 response.raise_for_status()
                 token_info = response.json()
-                logger.debug("Long-lived token response: %s", {
+                logger.debug("Long-lived Instagram token response: %s", {
                     **token_info,
                     'access_token': '***' if 'access_token' in token_info else None
                 })
                 return token_info
             except Exception as e:
-                logger.error("❌ Long-lived token request failed: %s", str(e))
+                logger.error("❌ Long-lived Instagram token request failed: %s", str(e))
                 logger.error("Response content: %s", response.text)
                 return None
             
         except Exception as e:
-            logger.error("❌ Failed to get long-lived token: %s", str(e), exc_info=True)
+            logger.error("❌ Failed to get long-lived Instagram token: %s", str(e), exc_info=True)
             return None
     
-    def _get_instagram_accounts(self, access_token: str) -> Optional[list]:
-        """Get Instagram accounts associated with the user"""
+    def _get_instagram_user_profile(self, access_token: str) -> Optional[Dict]:
+        """Get Instagram user profile information"""
         try:
-            logger.info("Getting Instagram accounts for user")
+            logger.info("Getting Instagram user profile")
             
-            # First get Facebook pages
-            pages_url = f"{self.base_url}/me/accounts"
+            url = "https://graph.instagram.com/me"
             params = {
                 'access_token': access_token,
-                'fields': 'id,name,access_token,instagram_business_account'
+                'fields': 'user_id,username,name,account_type,profile_picture_url,followers_count,follows_count,media_count'
             }
             
-            logger.debug("Making Facebook pages request to: %s", pages_url)
+            logger.debug("Making Instagram profile request to: %s", url)
             logger.debug("Request params: %s", {**params, 'access_token': '***'})
             
-            response = requests.get(pages_url, params=params, timeout=10)
-            logger.debug("Facebook pages response status: %d", response.status_code)
+            response = requests.get(url, params=params, timeout=10)
+            logger.debug("Instagram profile response status: %d", response.status_code)
             
             try:
                 response.raise_for_status()
-                pages_data = response.json()
-                logger.debug("Facebook pages response: %s", json.dumps(pages_data, indent=2))
+                profile_data = response.json()
+                logger.debug("Instagram profile response: %s", profile_data)
+                return profile_data
             except Exception as e:
-                logger.error("❌ Facebook pages request failed: %s", str(e))
+                logger.error("❌ Instagram profile request failed: %s", str(e))
                 logger.error("Response content: %s", response.text)
                 return None
             
-            instagram_accounts = []
-            
-            for page in pages_data.get('data', []):
-                if 'instagram_business_account' in page:
-                    ig_account_id = page['instagram_business_account']['id']
-                    logger.info("Found Instagram business account: %s", ig_account_id)
-                    
-                    # Get Instagram account details
-                    ig_url = f"{self.base_url}/{ig_account_id}"
-                    ig_params = {
-                        'access_token': page['access_token'],
-                        'fields': 'id,username,name,profile_picture_url,followers_count,media_count'
-                    }
-                    
-                    logger.debug("Making Instagram account request to: %s", ig_url)
-                    logger.debug("Request params: %s", {**ig_params, 'access_token': '***'})
-                    
-                    ig_response = requests.get(ig_url, params=ig_params, timeout=10)
-                    logger.debug("Instagram account response status: %d", ig_response.status_code)
-                    
-                    try:
-                        ig_response.raise_for_status()
-                        ig_data = ig_response.json()
-                        logger.debug("Instagram account response: %s", json.dumps(ig_data, indent=2))
-                        
-                        instagram_accounts.append({
-                            'id': ig_data.get('id'),
-                            'username': ig_data.get('username'),
-                            'name': ig_data.get('name'),
-                            'profile_picture_url': ig_data.get('profile_picture_url'),
-                            'followers_count': ig_data.get('followers_count'),
-                            'media_count': ig_data.get('media_count'),
-                            'access_token': page['access_token']
-                        })
-                    except Exception as e:
-                        logger.error("❌ Instagram account request failed: %s", str(e))
-                        logger.error("Response content: %s", ig_response.text)
-                        continue
-            
-            logger.info("✅ Found %d Instagram business accounts", len(instagram_accounts))
-            return instagram_accounts
-            
         except Exception as e:
-            logger.error("❌ Failed to get Instagram accounts: %s", str(e), exc_info=True)
+            logger.error("❌ Failed to get Instagram user profile: %s", str(e), exc_info=True)
             return None
     
     def encrypt_token(self, token: str) -> str:
