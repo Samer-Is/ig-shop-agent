@@ -1,10 +1,14 @@
 /**
  * Production API Service - 100% Complete
  * IG-Shop-Agent: Enterprise SaaS Platform
+ * 
+ * 🔧 DEBUG: Force rebuild - checking env vars in Azure SWA
  */
 
 // Production API base URL - Python FastAPI Backend
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://igshop-api.azurewebsites.net';
+console.log('🔍 VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
+console.log('🔍 Final API_BASE_URL:', API_BASE_URL);
 
 export interface ApiResponse<T> {
   data?: T;
