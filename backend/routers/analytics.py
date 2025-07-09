@@ -35,6 +35,7 @@ async def get_db() -> DatabaseService:
     return await get_database()
 
 @router.get("/", response_model=AnalyticsResponse)
+@router.get("", response_model=AnalyticsResponse)  # Handle both /analytics/ and /analytics
 async def get_analytics(db: DatabaseService = Depends(get_db)):
     """Get dashboard analytics"""
     try:

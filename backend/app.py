@@ -1,14 +1,13 @@
-"""
-FastAPI Backend Application for IG-Shop-Agent
-Multi-tenant Instagram DM management system
-"""
-# Updated to trigger deployment with fixed workflow (no nuclear option)
+# IG-Shop-Agent Backend API
+# Multi-tenant Instagram DM automation platform
+# 🚀 FORCE DEPLOYMENT - Backend API routing fix
+
+import logging
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 import os
-import logging
 from contextlib import asynccontextmanager
 import sys
 
@@ -86,11 +85,11 @@ if routers_imported:
         
         # NEW: /backend-api/ routes to avoid Azure SWA conflicts
         app.include_router(analytics.router, prefix="/backend-api/analytics")
-        app.include_router(auth.router, prefix="/backend-api")
+        app.include_router(auth.router, prefix="/backend-api/auth")
         app.include_router(conversations.router, prefix="/backend-api/conversations")
         app.include_router(orders.router, prefix="/backend-api/orders")
         app.include_router(catalog.router, prefix="/backend-api/catalog")
-        app.include_router(kb.router, prefix="/backend-api/kb")
+        app.include_router(kb.router, prefix="/backend-api/knowledge-base")
         
         logger.info("✅ All routers included successfully (both /api/ and /backend-api/ prefixes)")
     except Exception as e:
@@ -162,6 +161,14 @@ async def root():
                     "catalog": "/api/catalog",
                     "knowledge_base": "/api/kb",
                     "authentication": "/api/auth"
+                },
+                "backend_api": {
+                    "analytics": "/backend-api/analytics",
+                    "conversations": "/backend-api/conversations",
+                    "orders": "/backend-api/orders",
+                    "catalog": "/backend-api/catalog",
+                    "knowledge_base": "/backend-api/kb",
+                    "authentication": "/backend-api/auth"
                 }
             }
         }
