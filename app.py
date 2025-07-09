@@ -1,33 +1,29 @@
-"""
-IG-Shop-Agent Flask Web Application
-Azure Web App compatible backend with all API endpoints
-"""
-import os
+# IG-Shop-Agent Backend API
+# Multi-tenant Instagram DM automation platform
+# 🚀 FORCE DEPLOYMENT - Backend API routing fix
+
 import logging
-import asyncio
-from datetime import datetime
-from typing import Dict, List, Optional
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
+import os
+from contextlib import asynccontextmanager
+import sys
 
-from flask import Flask, request, jsonify, session
-from flask_cors import CORS
-import requests
-
-# Import our modules
+# Import configuration and database
 from config import settings
-from database import init_database, close_database, db
-from instagram_oauth import (
-    get_instagram_auth_url, 
-    handle_oauth_callback,
-    generate_session_token,
-    verify_session_token
-)
-from tenant_middleware import (
-    tenant_context,
-    tenant_middleware,
-    process_tenant_request,
-    get_current_tenant_id
-)
-from azure_keyvault import get_secret
+from database import get_database, init_database
+
+# Import routers
+try:
+    from routers import auth, conversations, orders, catalog, kb, webhook, analytics
+    routers_imported = True
+    import_error = None
+except Exception as e:
+    routers_imported = False
+    import_error = str(e)
+    logger.error(f"Failed to import routers: {e}")
 
 # Configure logging
 logging.basicConfig(
@@ -36,593 +32,434 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Create Flask app
-app = Flask(__name__)
-app.secret_key = get_secret('flask-secret-key') or settings.jwt_secret_key
+# Security
+security = HTTPBearer()
 
-# Enable CORS for frontend
-CORS(app, 
-     origins=["http://localhost:3000", "https://*.azurewebsites.net"],
-     supports_credentials=True)
-
-# Global variables for async operations
-loop = None
-
-def get_event_loop():
-    """Get or create event loop for async operations"""
-    global loop
-    if loop is None or loop.is_closed():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop
-
-def run_async(coro):
-    """Run async function in Flask context"""
-    loop = get_event_loop()
-    return loop.run_until_complete(coro)
-
-@app.before_request
-async def before_request():
-    """Process tenant context before each request"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager"""
+    # Startup
+    logger.info("🚀 Starting IG-Shop-Agent Backend...")
+    
+    # Initialize database
     try:
-        # Skip tenant processing for public endpoints
-        public_endpoints = ['/health', '/auth/instagram', '/auth/callback']
-        if request.endpoint in public_endpoints or request.path in public_endpoints:
-            return
+        await init_database()
+        logger.info("✅ Database initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Database initialization failed: {e}")
+        # Don't fail startup - let the app run and handle DB errors gracefully
+    
+    yield
+    
+    # Shutdown
+    logger.info("🛑 Shutting down IG-Shop-Agent Backend...")
+
+# Create FastAPI application
+app = FastAPI(
+    title="IG-Shop-Agent API",
+    description="Multi-tenant Instagram DM management system with AI-powered conversations",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+if routers_imported:
+    try:
+        # Original /api/ routes for backward compatibility
+        app.include_router(analytics.router, prefix="/api/analytics")
+        app.include_router(auth.router, prefix="/api")
+        app.include_router(conversations.router, prefix="/api/conversations")
+        app.include_router(orders.router, prefix="/api/orders")
+        app.include_router(catalog.router, prefix="/api/catalog")
+        app.include_router(kb.router, prefix="/api/kb")
+        app.include_router(webhook.router)
         
-        # Prepare request data for tenant middleware
-        request_data = {
-            'headers': dict(request.headers),
-            'url': request.path,
-            'method': request.method
-        }
+        # NEW: /backend-api/ routes to avoid Azure SWA conflicts
+        # Note: Analytics handled by direct route above to avoid router conflicts
+        app.include_router(auth.router, prefix="/backend-api/auth")
+        app.include_router(conversations.router, prefix="/backend-api/conversations")
+        app.include_router(orders.router, prefix="/backend-api/orders")
+        app.include_router(catalog.router, prefix="/backend-api/catalog")
+        app.include_router(kb.router, prefix="/backend-api/knowledge-base")
         
-        # Process tenant context
-        tenant_result = await process_tenant_request(request_data)
+        logger.info("✅ All routers included successfully (both /api/ and /backend-api/ prefixes)")
+    except Exception as e:
+        logger.error(f"❌ Failed to include routers: {e}")
+else:
+    logger.error(f"❌ Routers not imported due to error: {import_error}")
+
+# Add direct backend-api routes to avoid router conflicts
+@app.get("/backend-api/analytics")
+async def backend_analytics():
+    """Backend API analytics endpoint - proxy to analytics router"""
+    try:
+        from routers.analytics import get_analytics
+        from database import get_database
         
-        # Store tenant info in request context
-        request.tenant_info = tenant_result
+        # Get database connection
+        db = await get_database()
+        
+        # Call the analytics function directly
+        result = await get_analytics(db)
+        
+        return result
         
     except Exception as e:
-        logger.error(f"Error in before_request: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
+        logger.error(f"Backend analytics error: {e}")
+        return {
+            "orders": {"total": 0, "revenue": 0.0, "average_value": 0.0, "pending": 0, "completed": 0},
+            "catalog": {"total_products": 0, "active_products": 0, "out_of_stock": 0},
+            "conversations": {"total_messages": 0, "ai_responses": 0, "customer_messages": 0},
+            "recent_orders": []
+        }
 
-# =============================================================================
-# HEALTH CHECK ENDPOINTS
-# =============================================================================
+@app.get("/backend-api/catalog")
+async def backend_catalog():
+    """Backend API catalog endpoint"""
+    try:
+        from routers.catalog import get_catalog
+        from database import get_database
+        
+        db = await get_database()
+        result = await get_catalog(db)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Backend catalog error: {e}")
+        return []
 
-@app.route('/health', methods=['GET'])
-def health_check():
+@app.get("/backend-api/orders") 
+async def backend_orders():
+    """Backend API orders endpoint"""
+    try:
+        from routers.orders import get_orders
+        from database import get_database
+        
+        db = await get_database()
+        result = await get_orders(db)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Backend orders error: {e}")
+        return []
+
+@app.get("/backend-api/conversations")
+async def backend_conversations():
+    """Backend API conversations endpoint"""
+    try:
+        from routers.conversations import get_conversations
+        from database import get_database
+        
+        db = await get_database()
+        result = await get_conversations(db)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Backend conversations error: {e}")
+        return []
+
+@app.get("/backend-api/knowledge-base")
+async def backend_knowledge_base():
+    """Backend API knowledge base endpoint"""
+    try:
+        from routers.kb import get_knowledge_base
+        from database import get_database
+        
+        db = await get_database()
+        result = await get_knowledge_base(db)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Backend knowledge base error: {e}")
+        return []
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
     """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
-        'service': 'ig-shop-agent-backend'
-    })
-
-@app.route('/api/health', methods=['GET'])
-def api_health_check():
-    """API health check with more details"""
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
-        'service': 'ig-shop-agent-backend',
-        'version': '1.0.0',
-        'environment': settings.environment,
-        'features': {
-            'instagram_oauth': bool(settings.meta_app_id),
-            'openai_integration': bool(settings.openai_api_key),
-            'database_connected': True  # Will be updated based on actual connection
-        }
-    })
-
-# =============================================================================
-# AUTHENTICATION ENDPOINTS
-# =============================================================================
-
-@app.route('/auth/instagram', methods=['GET'])
-def instagram_auth():
-    """Start Instagram OAuth flow"""
     try:
-        business_name = request.args.get('business_name', '')
-        redirect_uri = request.args.get('redirect_uri', 'http://localhost:3000/auth/callback')
+        # Try to import settings
+        try:
+            from config import settings
+            environment = settings.ENVIRONMENT
+        except Exception as e:
+            environment = "unknown"
+            logger.warning(f"Could not import settings: {e}")
         
-        auth_url, state = get_instagram_auth_url(redirect_uri, business_name)
+        # Try to check Instagram OAuth status
+        oauth_status = "unknown"
+        oauth_message = "Could not check OAuth status"
+        try:
+            from instagram_oauth import instagram_oauth
+            oauth_status = "configured" if hasattr(instagram_oauth, 'is_configured') and instagram_oauth.is_configured else "not_configured"
+            oauth_message = "Instagram OAuth not configured - please set META_APP_ID and META_APP_SECRET" if oauth_status == "not_configured" else "All services operational"
+        except Exception as e:
+            logger.warning(f"Could not check Instagram OAuth status: {e}")
+            oauth_message = f"OAuth check failed: {str(e)}"
         
-        # Store state in session
-        session['oauth_state'] = state
-        session['business_name'] = business_name
-        
-        return jsonify({
-            'auth_url': auth_url,
-            'state': state
-        })
-        
-    except Exception as e:
-        logger.error(f"Instagram auth error: {e}")
-        return jsonify({'error': 'Failed to generate Instagram auth URL'}), 500
-
-@app.route('/auth/callback', methods=['GET'])
-def instagram_callback():
-    """Handle Instagram OAuth callback"""
-    try:
-        code = request.args.get('code')
-        state = request.args.get('state')
-        error = request.args.get('error')
-        
-        if error:
-            return jsonify({'error': f'Instagram OAuth error: {error}'}), 400
-        
-        if not code or not state:
-            return jsonify({'error': 'Missing authorization code or state'}), 400
-        
-        # Verify state
-        if state != session.get('oauth_state'):
-            return jsonify({'error': 'Invalid state parameter'}), 400
-        
-        # Get redirect URI from session or use default
-        redirect_uri = request.args.get('redirect_uri', 'http://localhost:3000/auth/callback')
-        
-        # Exchange code for token
-        auth_data = handle_oauth_callback(code, state, redirect_uri)
-        
-        if not auth_data:
-            return jsonify({'error': 'Failed to authenticate with Instagram'}), 400
-        
-        # Create or get tenant
-        instagram_accounts = auth_data['instagram_accounts']
-        if not instagram_accounts:
-            return jsonify({'error': 'No Instagram business accounts found'}), 400
-        
-        # Use first Instagram account
-        ig_account = instagram_accounts[0]
-        tenant_handle = f"@{ig_account['username']}"
-        
-        # Create tenant if doesn't exist
-        tenant_id = run_async(db.create_tenant(
-            tenant_handle,
-            auth_data.get('business_name') or ig_account['name'],
-            'professional'  # Default plan
-        ))
-        
-        # Generate session token
-        user_data = {
-            'id': ig_account['id'],
-            'username': ig_account['username'],
-            'name': ig_account['name']
+        return {
+            "status": "healthy",
+            "service": "ig-shop-agent-backend",
+            "version": "1.0.0",
+            "environment": environment,
+            "instagram_oauth": oauth_status,
+            "message": oauth_message
         }
         
-        session_token = generate_session_token(user_data, tenant_id)
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "degraded",
+            "service": "ig-shop-agent-backend",
+            "version": "1.0.0",
+            "error": str(e),
+            "message": "Health check encountered errors but service may still be functional"
+        }
+
+# Root endpoint
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    try:
+        return {
+            "message": "IG-Shop-Agent Backend API",
+            "version": "1.0.0",
+            "status": "running",
+            "docs": "/docs",
+            "endpoints": {
+                "health": "/health",
+                "debug": "/debug/filesystem",
+                "auth": "/auth/instagram/login",
+                "api": {
+                    "analytics": "/api/analytics",
+                    "conversations": "/api/conversations",
+                    "orders": "/api/orders",
+                    "catalog": "/api/catalog",
+                    "knowledge_base": "/api/kb",
+                    "authentication": "/api/auth"
+                },
+                "backend_api": {
+                    "analytics": "/backend-api/analytics",
+                    "conversations": "/backend-api/conversations",
+                    "orders": "/backend-api/orders",
+                    "catalog": "/backend-api/catalog",
+                    "knowledge_base": "/backend-api/kb",
+                    "authentication": "/backend-api/auth"
+                }
+            }
+        }
+    except Exception as e:
+        return {
+            "message": "IG-Shop-Agent Backend API",
+            "status": "error",
+            "error": str(e)
+        }
+
+# Debug endpoint to check file system
+@app.get("/debug/filesystem")
+async def debug_filesystem():
+    """Debug endpoint to check file system structure"""
+    try:
+        import os
+        from pathlib import Path
         
-        # Store auth data securely
-        run_async(db.store_instagram_token(tenant_id, auth_data))
+        current_dir = Path.cwd()
+        parent_dir = current_dir.parent
         
-        # Clean up session
-        session.pop('oauth_state', None)
-        session.pop('business_name', None)
+        # Safely get directory contents
+        try:
+            current_dir_contents = [str(item) for item in current_dir.iterdir()]
+        except Exception as e:
+            current_dir_contents = [f"Error reading directory: {e}"]
         
-        return jsonify({
-            'success': True,
-            'session_token': session_token,
-            'tenant_id': tenant_id,
-            'user': user_data,
-            'instagram_accounts': instagram_accounts
-        })
+        try:
+            parent_dir_contents = [str(item) for item in parent_dir.iterdir()] if parent_dir.exists() else []
+        except Exception as e:
+            parent_dir_contents = [f"Error reading parent directory: {e}"]
+        
+        return {
+            "current_working_directory": str(current_dir),
+            "parent_directory": str(parent_dir),
+            "current_dir_contents": current_dir_contents,
+            "parent_dir_contents": parent_dir_contents,
+            "python_path": os.environ.get("PYTHONPATH", ""),
+            "environment_vars": {
+                "PORT": os.environ.get("PORT", ""),
+                "ENVIRONMENT": os.environ.get("ENVIRONMENT", ""),
+                "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
+                "META_APP_ID": "***" if os.environ.get("META_APP_ID") else "not_set",
+                "META_APP_SECRET": "***" if os.environ.get("META_APP_SECRET") else "not_set"
+            }
+        }
         
     except Exception as e:
-        logger.error(f"Instagram callback error: {e}")
-        return jsonify({'error': 'Authentication failed'}), 500
+        logger.error(f"Debug endpoint failed: {e}")
+        return {
+            "error": str(e),
+            "message": "Debug endpoint encountered an error",
+            "basic_info": {
+                "working_directory": str(Path.cwd()) if Path else "unknown",
+                "python_executable": sys.executable if sys else "unknown"
+            }
+        }
 
-@app.route('/auth/verify', methods=['POST'])
-def verify_token():
-    """Verify session token"""
+# Test endpoint
+@app.get("/test")
+async def test_endpoint():
+    """Test endpoint to check if the app is working"""
+    return {
+        "message": "Test endpoint working",
+        "routers_imported": routers_imported,
+        "import_error": import_error
+    }
+
+# Instagram OAuth endpoint (workaround)
+@app.get("/auth/instagram/login")
+async def instagram_login_direct():
+    """Instagram OAuth login endpoint - direct implementation"""
     try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Missing or invalid authorization header'}), 401
+        # Import Instagram OAuth
+        from instagram_oauth import get_instagram_auth_url, instagram_oauth
+        from config import settings
+        import secrets
         
-        token = auth_header[7:]  # Remove 'Bearer ' prefix
-        payload = verify_session_token(token)
+        # Check if Instagram OAuth is configured
+        if not hasattr(instagram_oauth, 'is_configured') or not instagram_oauth.is_configured:
+            logger.error("❌ Instagram OAuth not configured")
+            return {
+                "error": "Instagram OAuth not configured",
+                "message": "Please contact the administrator to set up META_APP_ID and META_APP_SECRET."
+            }
         
-        if not payload:
-            return jsonify({'error': 'Invalid or expired token'}), 401
+        # Generate state for CSRF protection
+        state = secrets.token_urlsafe(32)
         
-        return jsonify({
-            'valid': True,
-            'user_id': payload.get('user_id'),
-            'username': payload.get('username'),
-            'tenant_id': payload.get('tenant_id')
-        })
-        
-    except Exception as e:
-        logger.error(f"Token verification error: {e}")
-        return jsonify({'error': 'Token verification failed'}), 500
-
-# =============================================================================
-# CATALOG MANAGEMENT ENDPOINTS
-# =============================================================================
-
-@app.route('/api/catalog', methods=['GET'])
-def get_catalog():
-    """Get catalog items for current tenant"""
-    try:
-        # Check tenant authentication
-        tenant_info = getattr(request, 'tenant_info', {})
-        if not tenant_info.get('success'):
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        # Get pagination parameters
-        limit = min(int(request.args.get('limit', 50)), 100)
-        offset = int(request.args.get('offset', 0))
-        category = request.args.get('category')
-        search = request.args.get('search')
-        
-        # Get catalog items
-        items = run_async(db.get_catalog_items(
-            tenant_id=tenant_info['tenant_id'],
-            limit=limit,
-            offset=offset,
-            category=category,
-            search=search
-        ))
-        
-        return jsonify({
-            'items': items,
-            'total': len(items),
-            'limit': limit,
-            'offset': offset
-        })
-        
-    except Exception as e:
-        logger.error(f"Get catalog error: {e}")
-        return jsonify({'error': 'Failed to fetch catalog'}), 500
-
-@app.route('/api/catalog', methods=['POST'])
-def create_catalog_item():
-    """Create new catalog item"""
-    try:
-        # Check tenant authentication
-        tenant_info = getattr(request, 'tenant_info', {})
-        if not tenant_info.get('success'):
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Invalid JSON data'}), 400
-        
-        # Validate required fields
-        required_fields = ['sku', 'name', 'price_jod']
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({'error': f'Missing required field: {field}'}), 400
-        
-        # Create catalog item
-        item_id = run_async(db.create_catalog_item(
-            tenant_id=tenant_info['tenant_id'],
-            item_data=data
-        ))
-        
-        return jsonify({
-            'success': True,
-            'item_id': item_id,
-            'message': 'Catalog item created successfully'
-        }), 201
-        
-    except Exception as e:
-        logger.error(f"Create catalog item error: {e}")
-        return jsonify({'error': 'Failed to create catalog item'}), 500
-
-@app.route('/api/catalog/<item_id>', methods=['PUT'])
-def update_catalog_item(item_id):
-    """Update catalog item"""
-    try:
-        # Check tenant authentication
-        tenant_info = getattr(request, 'tenant_info', {})
-        if not tenant_info.get('success'):
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Invalid JSON data'}), 400
-        
-        # Update catalog item
-        updated = run_async(db.update_catalog_item(
-            tenant_id=tenant_info['tenant_id'],
-            item_id=item_id,
-            item_data=data
-        ))
-        
-        if not updated:
-            return jsonify({'error': 'Item not found or access denied'}), 404
-        
-        return jsonify({
-            'success': True,
-            'message': 'Catalog item updated successfully'
-        })
-        
-    except Exception as e:
-        logger.error(f"Update catalog item error: {e}")
-        return jsonify({'error': 'Failed to update catalog item'}), 500
-
-@app.route('/api/catalog/<item_id>', methods=['DELETE'])
-def delete_catalog_item(item_id):
-    """Delete catalog item"""
-    try:
-        # Check tenant authentication
-        tenant_info = getattr(request, 'tenant_info', {})
-        if not tenant_info.get('success'):
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        # Delete catalog item
-        deleted = run_async(db.delete_catalog_item(
-            tenant_id=tenant_info['tenant_id'],
-            item_id=item_id
-        ))
-        
-        if not deleted:
-            return jsonify({'error': 'Item not found or access denied'}), 404
-        
-        return jsonify({
-            'success': True,
-            'message': 'Catalog item deleted successfully'
-        })
-        
-    except Exception as e:
-        logger.error(f"Delete catalog item error: {e}")
-        return jsonify({'error': 'Failed to delete catalog item'}), 500
-
-# =============================================================================
-# ORDER MANAGEMENT ENDPOINTS
-# =============================================================================
-
-@app.route('/api/orders', methods=['GET'])
-def get_orders():
-    """Get orders for current tenant"""
-    try:
-        # Check tenant authentication
-        tenant_info = getattr(request, 'tenant_info', {})
-        if not tenant_info.get('success'):
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        # Get pagination parameters
-        limit = min(int(request.args.get('limit', 50)), 100)
-        offset = int(request.args.get('offset', 0))
-        status = request.args.get('status')
-        
-        # Get orders
-        orders = run_async(db.get_orders(
-            tenant_id=tenant_info['tenant_id'],
-            limit=limit,
-            offset=offset,
-            status=status
-        ))
-        
-        return jsonify({
-            'orders': orders,
-            'total': len(orders),
-            'limit': limit,
-            'offset': offset
-        })
-        
-    except Exception as e:
-        logger.error(f"Get orders error: {e}")
-        return jsonify({'error': 'Failed to fetch orders'}), 500
-
-@app.route('/api/orders', methods=['POST'])
-def create_order():
-    """Create new order"""
-    try:
-        # Check tenant authentication
-        tenant_info = getattr(request, 'tenant_info', {})
-        if not tenant_info.get('success'):
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Invalid JSON data'}), 400
-        
-        # Validate required fields
-        required_fields = ['sku', 'qty', 'customer', 'phone', 'total_amount']
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({'error': f'Missing required field: {field}'}), 400
-        
-        # Create order
-        order_id = run_async(db.create_order(
-            tenant_id=tenant_info['tenant_id'],
-            order_data=data
-        ))
-        
-        return jsonify({
-            'success': True,
-            'order_id': order_id,
-            'message': 'Order created successfully'
-        }), 201
-        
-    except Exception as e:
-        logger.error(f"Create order error: {e}")
-        return jsonify({'error': 'Failed to create order'}), 500
-
-@app.route('/api/orders/<order_id>/status', methods=['PUT'])
-def update_order_status(order_id):
-    """Update order status"""
-    try:
-        # Check tenant authentication
-        tenant_info = getattr(request, 'tenant_info', {})
-        if not tenant_info.get('success'):
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        data = request.get_json()
-        if not data or 'status' not in data:
-            return jsonify({'error': 'Missing status field'}), 400
-        
-        # Update order status
-        updated = run_async(db.update_order_status(
-            tenant_id=tenant_info['tenant_id'],
-            order_id=order_id,
-            status=data['status']
-        ))
-        
-        if not updated:
-            return jsonify({'error': 'Order not found or access denied'}), 404
-        
-        return jsonify({
-            'success': True,
-            'message': 'Order status updated successfully'
-        })
-        
-    except Exception as e:
-        logger.error(f"Update order status error: {e}")
-        return jsonify({'error': 'Failed to update order status'}), 500
-
-# =============================================================================
-# AI AGENT ENDPOINTS
-# =============================================================================
-
-@app.route('/api/ai/test-response', methods=['POST'])
-def test_ai_response():
-    """Test AI agent response"""
-    try:
-        # Check tenant authentication
-        tenant_info = getattr(request, 'tenant_info', {})
-        if not tenant_info.get('success'):
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        data = request.get_json()
-        if not data or 'message' not in data:
-            return jsonify({'error': 'Missing message field'}), 400
-        
-        # Get customer message
-        customer_message = data['message']
-        
-        # Get tenant's catalog for context
-        catalog = run_async(db.get_catalog_items(
-            tenant_id=tenant_info['tenant_id'],
-            limit=50
-        ))
-        
-        # Generate AI response (simplified for now)
-        ai_response = generate_ai_response(customer_message, catalog, tenant_info)
-        
-        return jsonify({
-            'success': True,
-            'response': ai_response,
-            'processed_at': datetime.utcnow().isoformat()
-        })
-        
-    except Exception as e:
-        logger.error(f"AI test response error: {e}")
-        return jsonify({'error': 'Failed to generate AI response'}), 500
-
-def generate_ai_response(message: str, catalog: List[Dict], tenant_info: Dict) -> str:
-    """Generate AI response using OpenAI (simplified implementation)"""
-    try:
-        import openai
-        
-        # Set OpenAI API key
-        openai.api_key = settings.openai_api_key
-        
-        # Create context from catalog
-        catalog_context = ""
-        if catalog:
-            catalog_context = "Available products:\n"
-            for item in catalog[:10]:  # Limit to first 10 items
-                catalog_context += f"- {item['name']}: {item['price_jod']} JOD\n"
-        
-        # Create prompt
-        prompt = f"""You are a helpful sales assistant for {tenant_info.get('tenant_info', {}).get('display_name', 'an online store')} in Jordan. 
-        
-Respond in Jordanian Arabic dialect. Be friendly and helpful.
-
-{catalog_context}
-
-Customer message: {message}
-
-Provide a helpful response in Jordanian Arabic:"""
-        
-        # Make OpenAI API call
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful sales assistant in Jordan. Always respond in Jordanian Arabic dialect."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=200,
-            temperature=0.7
+        # Get Instagram auth URL
+        auth_url, _ = get_instagram_auth_url(
+            redirect_uri=settings.META_REDIRECT_URI,
+            business_name=""
         )
         
-        return response.choices[0].message.content.strip()
+        logger.info(f"Generated Instagram auth URL with state: {state}")
+        
+        # Create response with auth URL and state
+        response = {
+            "auth_url": auth_url,
+            "state": state,
+            "status": "ready"
+        }
+        
+        return response
         
     except Exception as e:
-        logger.error(f"OpenAI API error: {e}")
-        return "أهلاً وسهلاً! كيف بقدر أساعدك اليوم؟ (Hello! How can I help you today?)"
+        logger.error(f"Failed to generate Instagram auth URL: {str(e)}")
+        return {
+            "error": "Failed to generate Instagram authorization URL",
+            "message": str(e),
+            "status": "error"
+        }
 
-# =============================================================================
-# ANALYTICS ENDPOINTS
-# =============================================================================
-
-@app.route('/api/analytics/dashboard', methods=['GET'])
-def get_dashboard_analytics():
-    """Get dashboard analytics data"""
+# Instagram OAuth callback endpoint (workaround)
+@app.post("/auth/instagram/callback")
+async def instagram_callback_direct(request: dict):
+    """Instagram OAuth callback endpoint - direct implementation"""
     try:
-        # Check tenant authentication
-        tenant_info = getattr(request, 'tenant_info', {})
-        if not tenant_info.get('success'):
-            return jsonify({'error': 'Authentication required'}), 401
+        # Import Instagram OAuth
+        from instagram_oauth import instagram_oauth
+        from database import get_database
         
-        # Get analytics data
-        analytics = run_async(db.get_dashboard_analytics(tenant_info['tenant_id']))
+        code = request.get("code")
+        state = request.get("state")
         
-        return jsonify(analytics)
+        if not code or not state:
+            logger.error("❌ Missing required parameters: code=%s, state=%s", bool(code), bool(state))
+            return {
+                "error": "Missing required parameters",
+                "message": "Code and state are required",
+                "status": "error"
+            }
         
+        try:
+            # Exchange code for token
+            logger.info("Exchanging authorization code for token")
+            token_data = instagram_oauth.exchange_code_for_token(code, state)
+            
+            if not token_data:
+                logger.error("❌ Failed to exchange code for token - no data returned")
+                return {
+                    "error": "Failed to exchange authorization code for token",
+                    "status": "error"
+                }
+            
+            logger.info("✅ Successfully exchanged code for token")
+            
+            # Get database connection
+            db = await get_database()
+            
+            # Store tokens in database
+            if token_data.get('instagram_accounts'):
+                account = token_data['instagram_accounts'][0]  # Use first account
+                await db.store_instagram_tokens(
+                    account['id'],
+                    account['access_token'],
+                    account
+                )
+            
+            # Create response
+            response = {
+                "success": True,
+                "token": token_data.get('access_token', ''),
+                "user": {
+                    "id": token_data.get('instagram_accounts', [{}])[0].get('id', ''),
+                    "instagram_handle": token_data.get('instagram_accounts', [{}])[0].get('username', ''),
+                    "instagram_connected": True
+                },
+                "instagram_handle": token_data.get('instagram_accounts', [{}])[0].get('username', ''),
+                "status": "success"
+            }
+            
+            return response
+            
+        except ValueError as e:
+            logger.error("❌ Token exchange failed: %s", str(e))
+            return {
+                "error": "Token exchange failed",
+                "message": str(e),
+                "status": "error"
+            }
+            
     except Exception as e:
-        logger.error(f"Dashboard analytics error: {e}")
-        return jsonify({'error': 'Failed to fetch analytics'}), 500
+        logger.error("❌ Unexpected error in instagram_callback_direct: %s", str(e))
+        return {
+            "error": "Internal server error",
+            "message": str(e),
+            "status": "error"
+        }
 
-# =============================================================================
-# ERROR HANDLERS
-# =============================================================================
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Global exception handler"""
+    logger.error(f"Global exception: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
 
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'error': 'Endpoint not found'}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({'error': 'Internal server error'}), 500
-
-@app.errorhandler(Exception)
-def handle_exception(e):
-    logger.error(f"Unhandled exception: {e}")
-    return jsonify({'error': 'An unexpected error occurred'}), 500
-
-# =============================================================================
-# APPLICATION STARTUP
-# =============================================================================
-
-@app.before_first_request
-def initialize_app():
-    """Initialize the application"""
-    try:
-        logger.info("Initializing IG-Shop-Agent backend...")
-        
-        # Initialize database
-        run_async(init_database())
-        
-        logger.info("Backend initialization completed successfully")
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize backend: {e}")
-        raise
-
-def create_app():
-    """Application factory"""
-    return app
-
-if __name__ == '__main__':
-    # For local development
-    app.run(
-        host='0.0.0.0',
-        port=int(os.environ.get('PORT', 8000)),
-        debug=settings.debug
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        app,
+        host=settings.API_HOST,
+        port=settings.API_PORT,
+        log_level="info"
     ) 

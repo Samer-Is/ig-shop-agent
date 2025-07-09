@@ -1,22 +1,24 @@
 #!/bin/bash
 
-# Azure Web App startup script for Python Flask application
-echo "Starting IG-Shop-Agent Flask Backend..."
+# IG-Shop-Agent Backend Startup Script
+# Azure Web App startup configuration
 
-# Set environment variables if not already set
-export PORT=${PORT:-8080}
-export WEBSITES_PORT=${WEBSITES_PORT:-8080}
+set -e
 
-# Navigate to the application directory
+echo "Starting IG-Shop-Agent Backend..."
+echo "Environment: $ENVIRONMENT"
+echo "Python version: $(python --version)"
+
+# Set environment variables
+export PYTHONPATH="/home/site/wwwroot/backend:$PYTHONPATH"
+export FLASK_APP=app.py
+export FLASK_ENV=production
+
+# Install dependencies if needed
+echo "Installing dependencies..."
+pip install -r requirements.txt
+
+# Start the FastAPI application with uvicorn
+echo "Starting FastAPI application..."
 cd /home/site/wwwroot
-
-# Install dependencies if requirements.txt exists
-if [ -f requirements.txt ]; then
-    echo "Installing Python dependencies..."
-    python -m pip install --upgrade pip
-    python -m pip install -r requirements.txt
-fi
-
-# Start the Flask application
-echo "Starting Flask app on port $PORT..."
-exec python app_simple.py 
+uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
