@@ -71,7 +71,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+# Remove duplicate router inclusions and add direct backend-api routes
 if routers_imported:
     try:
         # Original /api/ routes for backward compatibility
@@ -83,36 +83,21 @@ if routers_imported:
         app.include_router(kb.router, prefix="/api/kb")
         app.include_router(webhook.router)
         
-        # NEW: /backend-api/ routes to avoid Azure SWA conflicts
-        # Note: Analytics handled by direct route above to avoid router conflicts
-        app.include_router(auth.router, prefix="/backend-api/auth")
-        app.include_router(conversations.router, prefix="/backend-api/conversations")
-        app.include_router(orders.router, prefix="/backend-api/orders")
-        app.include_router(catalog.router, prefix="/backend-api/catalog")
-        app.include_router(kb.router, prefix="/backend-api/knowledge-base")
-        
-        logger.info("✅ All routers included successfully (both /api/ and /backend-api/ prefixes)")
+        logger.info("✅ Original API routers included successfully")
     except Exception as e:
         logger.error(f"❌ Failed to include routers: {e}")
 else:
     logger.error(f"❌ Routers not imported due to error: {import_error}")
 
-# Add direct backend-api routes to avoid router conflicts
+# Direct backend-api routes to avoid Azure SWA conflicts
 @app.get("/backend-api/analytics")
 async def backend_analytics():
-    """Backend API analytics endpoint - proxy to analytics router"""
+    """Backend API analytics endpoint"""
     try:
         from routers.analytics import get_analytics
         from database import get_database
-        
-        # Get database connection
         db = await get_database()
-        
-        # Call the analytics function directly
-        result = await get_analytics(db)
-        
-        return result
-        
+        return await get_analytics(db)
     except Exception as e:
         logger.error(f"Backend analytics error: {e}")
         return {
@@ -121,6 +106,42 @@ async def backend_analytics():
             "conversations": {"total_messages": 0, "ai_responses": 0, "customer_messages": 0},
             "recent_orders": []
         }
+
+@app.get("/backend-api/catalog")
+async def backend_catalog():
+    """Backend API catalog endpoint"""
+    try:
+        from routers.catalog import get_catalog
+        from database import get_database
+        db = await get_database()
+        return await get_catalog(db)
+    except Exception as e:
+        logger.error(f"Backend catalog error: {e}")
+        return []
+
+@app.get("/backend-api/orders")
+async def backend_orders():
+    """Backend API orders endpoint"""
+    try:
+        from routers.orders import get_orders
+        from database import get_database
+        db = await get_database()
+        return await get_orders(db)
+    except Exception as e:
+        logger.error(f"Backend orders error: {e}")
+        return []
+
+@app.get("/backend-api/conversations")
+async def backend_conversations():
+    """Backend API conversations endpoint"""
+    try:
+        from routers.conversations import get_conversations
+        from database import get_database
+        db = await get_database()
+        return await get_conversations(db)
+    except Exception as e:
+        logger.error(f"Backend conversations error: {e}")
+        return []
 
 # Health check endpoint
 @app.get("/health")
