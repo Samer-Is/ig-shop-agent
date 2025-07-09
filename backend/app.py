@@ -75,26 +75,24 @@ app.add_middleware(
 # Include routers
 if routers_imported:
     try:
+        # Original /api/ routes for backward compatibility
         app.include_router(analytics.router, prefix="/api/analytics")
-        logger.info("✅ Analytics router included successfully")
-        
         app.include_router(auth.router, prefix="/api")
-        logger.info("✅ Auth router included successfully")
-        
         app.include_router(conversations.router, prefix="/api/conversations")
-        logger.info("✅ Conversations router included successfully")
-        
         app.include_router(orders.router, prefix="/api/orders")
-        logger.info("✅ Orders router included successfully")
-        
         app.include_router(catalog.router, prefix="/api/catalog")
-        logger.info("✅ Catalog router included successfully")
-        
         app.include_router(kb.router, prefix="/api/kb")
-        logger.info("✅ Knowledge Base router included successfully")
-        
         app.include_router(webhook.router)
-        logger.info("✅ Webhook router included successfully")
+        
+        # NEW: /backend-api/ routes to avoid Azure SWA conflicts
+        app.include_router(analytics.router, prefix="/backend-api/analytics")
+        app.include_router(auth.router, prefix="/backend-api")
+        app.include_router(conversations.router, prefix="/backend-api/conversations")
+        app.include_router(orders.router, prefix="/backend-api/orders")
+        app.include_router(catalog.router, prefix="/backend-api/catalog")
+        app.include_router(kb.router, prefix="/backend-api/kb")
+        
+        logger.info("✅ All routers included successfully (both /api/ and /backend-api/ prefixes)")
     except Exception as e:
         logger.error(f"❌ Failed to include routers: {e}")
 else:

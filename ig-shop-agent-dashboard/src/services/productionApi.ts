@@ -141,7 +141,7 @@ class ProductionApiService {
 
   // Authentication
   async authenticateWithInstagram(code: string): Promise<ApiResponse<{ access_token: string; user: any }>> {
-    const response = await this.request<{ access_token: string; user: any }>('/api/auth/instagram', {
+    const response = await this.request<{ access_token: string; user: any }>('/backend-api/auth/instagram', {
       method: 'POST',
       body: JSON.stringify({ code }),
     });
@@ -161,40 +161,40 @@ class ProductionApiService {
 
   // Catalog operations
   async getCatalog(): Promise<ApiResponse<CatalogItem[]>> {
-    return this.request<CatalogItem[]>('/api/catalog');
+    return this.request<CatalogItem[]>('/backend-api/catalog');
   }
 
   async addCatalogItem(item: Partial<CatalogItem>): Promise<ApiResponse<{ id: number; message: string; enhanced_description: string }>> {
-    return this.request('/api/catalog', {
+    return this.request('/backend-api/catalog', {
       method: 'POST',
       body: JSON.stringify(item),
     });
   }
 
   async updateCatalogItem(id: number, item: Partial<CatalogItem>): Promise<ApiResponse<{ message: string }>> {
-    return this.request(`/api/catalog/${id}`, {
+    return this.request(`/backend-api/catalog/${id}`, {
       method: 'PUT',
       body: JSON.stringify(item),
     });
   }
 
   async deleteCatalogItem(id: number): Promise<ApiResponse<{ message: string }>> {
-    return this.request(`/api/catalog/${id}`, {
+    return this.request(`/backend-api/catalog/${id}`, {
       method: 'DELETE',
     });
   }
 
   // Order operations
   async getOrders(): Promise<ApiResponse<Order[]>> {
-    return this.request<Order[]>('/api/orders');
+    return this.request<Order[]>('/backend-api/orders');
   }
 
   async getOrder(id: number): Promise<ApiResponse<Order>> {
-    return this.request<Order>(`/api/orders/${id}`);
+    return this.request<Order>(`/backend-api/orders/${id}`);
   }
 
   async updateOrderStatus(id: number, status: string): Promise<ApiResponse<{ message: string }>> {
-    return this.request(`/api/orders/${id}/status`, {
+    return this.request(`/backend-api/orders/${id}/status`, {
       method: 'PUT',
       body: JSON.stringify({ status }),
     });
@@ -202,7 +202,7 @@ class ProductionApiService {
 
   // AI operations
   async generateAIResponse(message: string): Promise<ApiResponse<AIResponse>> {
-    return this.request<AIResponse>('/api/ai/response', {
+    return this.request<AIResponse>('/backend-api/ai/response', {
       method: 'POST',
       body: JSON.stringify({ message }),
     });
@@ -210,21 +210,21 @@ class ProductionApiService {
 
   // Analytics
   async getAnalytics(): Promise<ApiResponse<Analytics>> {
-    return this.request<Analytics>('/api/analytics');
+    return this.request<Analytics>('/backend-api/analytics');
   }
 
   // Conversations
   async getConversations(): Promise<ApiResponse<Conversation[]>> {
-    return this.request<Conversation[]>('/api/conversations');
+    return this.request<Conversation[]>('/backend-api/conversations');
   }
 
   // Business Profile operations
   async getBusinessProfile(): Promise<ApiResponse<any>> {
-    return this.request('/api/profile');
+    return this.request('/backend-api/profile');
   }
 
   async updateBusinessProfile(profile: any): Promise<ApiResponse<{ message: string }>> {
-    return this.request('/api/profile', {
+    return this.request('/backend-api/profile', {
       method: 'PUT',
       body: JSON.stringify(profile),
     });
@@ -232,14 +232,14 @@ class ProductionApiService {
 
   // Knowledge Base operations
   async getKnowledgeBase(): Promise<ApiResponse<any[]>> {
-    return this.request('/api/knowledge-base');
+    return this.request('/backend-api/knowledge-base');
   }
 
   async uploadDocument(file: File): Promise<ApiResponse<{ message: string; id: number }>> {
     const formData = new FormData();
     formData.append('file', file);
 
-    return this.request('/api/knowledge-base/upload', {
+    return this.request('/backend-api/knowledge-base/upload', {
       method: 'POST',
       body: formData,
       headers: {
@@ -251,11 +251,11 @@ class ProductionApiService {
 
   // Settings operations
   async getSettings(): Promise<ApiResponse<any>> {
-    return this.request('/api/settings');
+    return this.request('/backend-api/settings');
   }
 
   async updateSettings(settings: any): Promise<ApiResponse<{ message: string }>> {
-    return this.request('/api/settings', {
+    return this.request('/backend-api/settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
     });
@@ -263,18 +263,18 @@ class ProductionApiService {
 
   // Instagram integration
   async getInstagramProfile(): Promise<ApiResponse<any>> {
-    return this.request('/api/instagram/profile');
+    return this.request('/backend-api/instagram/profile');
   }
 
   async refreshInstagramToken(): Promise<ApiResponse<{ message: string }>> {
-    return this.request('/api/instagram/refresh-token', {
+    return this.request('/backend-api/instagram/refresh-token', {
       method: 'POST',
     });
   }
 
   // Webhook operations
   async getWebhookStatus(): Promise<ApiResponse<{ status: string; last_activity: string }>> {
-    return this.request('/api/webhook/status');
+    return this.request('/backend-api/webhook/status');
   }
 
   // Utility methods
@@ -319,7 +319,7 @@ class ProductionApiService {
 
   // Batch operations
   async batchUpdateCatalog(updates: Array<{ id: number; data: Partial<CatalogItem> }>): Promise<ApiResponse<{ updated: number; errors: any[] }>> {
-    return this.request('/api/catalog/batch', {
+    return this.request('/backend-api/catalog/batch', {
       method: 'PUT',
       body: JSON.stringify({ updates }),
     });
@@ -327,7 +327,7 @@ class ProductionApiService {
 
   // Export data
   async exportData(type: 'catalog' | 'orders' | 'analytics'): Promise<ApiResponse<{ download_url: string }>> {
-    return this.request(`/api/export/${type}`, {
+    return this.request(`/backend-api/export/${type}`, {
       method: 'POST',
     });
   }
