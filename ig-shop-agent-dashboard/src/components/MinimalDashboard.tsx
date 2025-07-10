@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { productionApi } from '../services/productionApi';
+import { apiService } from '../services/api';
 
 interface AnalyticsData {
   orders: {
@@ -66,14 +66,14 @@ const MinimalDashboard: React.FC = () => {
     try {
       setLoading(true);
       const [analyticsData, productsData, conversationsData] = await Promise.all([
-        productionApi.getAnalytics(),
-        productionApi.getCatalog(),
-        productionApi.getConversations()
+        apiService.getDashboardAnalytics(),
+        apiService.getCatalog(),
+        apiService.getConversations()
       ]);
 
-      setAnalytics(analyticsData);
-      setProducts(productsData);
-      setConversations(conversationsData.slice(0, 10)); // Last 10 conversations
+      setAnalytics(analyticsData.data);
+      setProducts(productsData.data || []);
+      setConversations((conversationsData.data || []).slice(0, 10)); // Last 10 conversations
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
