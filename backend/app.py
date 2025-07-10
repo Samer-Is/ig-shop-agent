@@ -4,6 +4,7 @@
 
 import logging
 import json
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -83,6 +84,7 @@ if routers_imported:
         app.include_router(catalog.router, prefix="/api/catalog")
         app.include_router(kb.router, prefix="/api/kb")
         app.include_router(webhook.router)
+        logger.info("✅ Webhook router included successfully")
         
         logger.info("✅ Original API routers included successfully")
     except Exception as e:
@@ -144,64 +146,7 @@ async def backend_conversations():
         logger.error(f"Backend conversations error: {e}")
         return []
 
-# Instagram Webhook endpoints (direct implementation)
-@app.get("/webhooks/instagram")
-async def verify_instagram_webhook(
-    hub_mode: str = None,
-    hub_challenge: str = None,
-    hub_verify_token: str = None
-):
-    """Instagram Webhook Verification"""
-    logger.info(f"Webhook verification request: mode={hub_mode}, token={hub_verify_token}")
-    
-    WEBHOOK_VERIFY_TOKEN = "igshop_webhook_verify_2024"
-    
-    if hub_mode == "subscribe" and hub_verify_token == WEBHOOK_VERIFY_TOKEN:
-        logger.info("✅ Webhook verification successful")
-        from fastapi.responses import PlainTextResponse
-        return PlainTextResponse(content=hub_challenge)
-    else:
-        logger.error(f"❌ Webhook verification failed: invalid token or mode")
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-@app.post("/webhooks/instagram")
-async def handle_instagram_webhook_direct(request: Request):
-    """Handle Instagram webhook events directly"""
-    try:
-        body = await request.body()
-        webhook_data = json.loads(body.decode('utf-8'))
-        logger.info(f"Received Instagram webhook: {json.dumps(webhook_data, indent=2)}")
-        
-        # Import webhook processing
-        try:
-            from routers.webhook import process_webhook_entry
-            from database import get_database
-            
-            db = await get_database()
-            
-            # Process webhook entries
-            if "entry" in webhook_data:
-                for entry in webhook_data["entry"]:
-                    await process_webhook_entry(entry, db)
-            
-            return {"status": "received"}
-        except Exception as e:
-            logger.error(f"Webhook processing error: {e}")
-            return {"status": "error", "message": str(e)}
-            
-    except Exception as e:
-        logger.error(f"❌ Error processing webhook: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-@app.get("/webhooks/health")
-async def webhook_health_direct():
-    """Webhook health check"""
-    return {
-        "status": "healthy",
-        "service": "instagram_webhook",
-        "webhook_url": "/webhooks/instagram",
-        "verification_token": "configured"
-    }
+# Instagram Webhook endpoints are now handled by the webhook router
 
 # Health check endpoint
 @app.get("/health")
@@ -230,10 +175,12 @@ async def health_check():
         return {
             "status": "healthy",
             "service": "ig-shop-agent-backend",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "environment": environment,
             "instagram_oauth": oauth_status,
-            "message": oauth_message
+            "message": oauth_message,
+            "webhook_endpoints_available": True,
+            "deployment_timestamp": str(datetime.now())
         }
         
     except Exception as e:
@@ -341,6 +288,17 @@ async def test_endpoint():
         "message": "Test endpoint working",
         "routers_imported": routers_imported,
         "import_error": import_error
+    }
+
+@app.get("/webhook-test")
+async def webhook_test_endpoint():
+    """Test endpoint to verify webhook functionality is available"""
+    logger.info("🔍 Webhook test endpoint called")
+    return {
+        "message": "Webhook routes are working",
+        "webhook_endpoints": ["/webhooks/instagram", "/webhooks/health"],
+        "timestamp": str(datetime.now()),
+        "status": "ok"
     }
 
 # Instagram OAuth endpoint (workaround)

@@ -21,7 +21,7 @@ jobs:
           lfs: false
       - name: Create Environment File
         run: |
-          cd ig-shop-agent-dashboard
+          cd frontend
           echo "🔍 Creating .env file with production values..."
           echo "VITE_API_BASE_URL=https://igshop-api.azurewebsites.net" > .env
           echo "VITE_ENVIRONMENT=production" >> .env
@@ -39,7 +39,7 @@ jobs:
           action: "upload"
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-          app_location: "ig-shop-agent-dashboard" # App source code path
+          app_location: "frontend" # App source code path
           api_location: "" # Api source code path - optional
           output_location: "dist" # Built app content directory - optional
           ###### End of Repository/Build Configurations ######
