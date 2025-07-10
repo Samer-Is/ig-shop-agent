@@ -10,6 +10,7 @@ import { DashboardLayout } from './components/layout/DashboardLayout';
 import { Login } from './pages/Login';
 import ProductionDashboard from './components/ProductionDashboard';
 import { Catalog } from './pages/Catalog';
+import { AddProduct } from './pages/AddProduct';
 import { Orders } from './pages/Orders';
 import { Conversations } from './pages/Conversations';
 import { Analytics } from './pages/Analytics';
@@ -44,6 +45,7 @@ function App() {
                 <Route index element={<ProductionDashboard />} />
                 <Route path="dashboard" element={<ProductionDashboard />} />
                 <Route path="catalog" element={<Catalog />} />
+                <Route path="add-product" element={<AddProduct />} />
                 <Route path="orders" element={<Orders />} />
                 <Route path="conversations" element={<Conversations />} />
                 <Route path="analytics" element={<Analytics />} />
