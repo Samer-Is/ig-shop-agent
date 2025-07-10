@@ -1,2 +1,6 @@
 [config]
+<<<<<<< HEAD
 command = startup.sh 
+=======
+SCM_DO_BUILD_DURING_DEPLOYMENT=true 
+>>>>>>> 56b08d0d26fa50fa7c0d36daeb6e914358d305c4
