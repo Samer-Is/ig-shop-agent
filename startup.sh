@@ -1,24 +1,19 @@
 #!/bin/bash
 
-# IG-Shop-Agent Backend Startup Script
-# Azure Web App startup configuration
+# Azure Web Apps startup script for Python FastAPI application
+echo "Starting IG-Shop-Agent Backend API..."
 
-set -e
+# Set Python path
+export PYTHONPATH="${PYTHONPATH}:/home/site/wwwroot"
 
-echo "Starting IG-Shop-Agent Backend..."
-echo "Environment: $ENVIRONMENT"
-echo "Python version: $(python --version)"
-
-# Set environment variables
-export PYTHONPATH="/home/site/wwwroot/backend:$PYTHONPATH"
-export FLASK_APP=app.py
-export FLASK_ENV=production
-
-# Install dependencies if needed
-echo "Installing dependencies..."
-pip install -r requirements.txt
-
-# Start the FastAPI application with uvicorn
-echo "Starting FastAPI application..."
+# Change to application directory
 cd /home/site/wwwroot
-uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
+
+# Install dependencies if not already installed
+echo "Installing Python dependencies..."
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+# Start the FastAPI application with Gunicorn
+echo "Starting FastAPI application with Gunicorn on port $PORT..."
+python -m gunicorn app:app --bind 0.0.0.0:${PORT:-8000} --workers 1 --worker-class uvicorn.workers.UvicornWorker --timeout 600 --keep-alive 2 --max-requests 1000 --max-requests-jitter 50 --log-level info
