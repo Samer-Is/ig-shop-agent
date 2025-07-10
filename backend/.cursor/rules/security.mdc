@@ -1,0 +1,21 @@
+---
+description: Security & privacy guard-rails
+globs: []
+alwaysApply: true
+---
+
+# Secrets
+- **Never** hard-code tokens, passwords, or keys—use `dotenv` or CI secrets.
+- If the AI suggests embedding a secret, replace with `process.env.*` placeholder.
+
+# Privacy Mode
+- Recommend `Cmd/Ctrl+Shift+P` → “Enable Privacy Mode” when working with sensitive code.
+
+# .cursorignore
+- AI must add matching patterns to `.cursorignore` for:
+  - `*.env`, `*.pem`, `*.key`
+  - `node_modules/**`, `.venv/**`, `__pycache__/`
+  - Large binary assets
+
+# Self-audit
+- Warn if a diff shows any line that matches regex `(AKIA|AIza|ghp_)[A-Za-z0-9]{10,}`.
