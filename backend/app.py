@@ -146,6 +146,48 @@ async def backend_conversations():
         logger.error(f"Backend conversations error: {e}")
         return []
 
+@app.post("/backend-api/ai/test")
+async def backend_ai_test(request: Request):
+    """Backend API AI test endpoint"""
+    try:
+        from azure_openai_service import AzureOpenAIService
+        
+        # Parse request data
+        data = await request.json()
+        message = data.get('message', '')
+        business_rules = data.get('business_rules', {})
+        products = data.get('products', [])
+        
+        if not message:
+            return {"error": "Message is required"}
+        
+        # Initialize AI service
+        ai_service = AzureOpenAIService()
+        
+        # Generate AI response with context
+        ai_response = await ai_service.generate_response(
+            message=message,
+            catalog_items=products,
+            conversation_history=[],
+            business_rules=business_rules
+        )
+        
+        return {
+            "response": ai_response,
+            "context": {
+                "products_count": len(products),
+                "business_rules_provided": bool(business_rules),
+                "message_length": len(message)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Backend AI test error: {e}")
+        return {
+            "error": str(e),
+            "message": "AI test failed - check logs for details"
+        }
+
 # Instagram Webhook endpoints are now handled by the webhook router
 
 # Health check endpoint

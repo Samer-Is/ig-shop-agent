@@ -57,6 +57,10 @@ const MinimalDashboard: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [testMessage, setTestMessage] = useState('');
+  const [aiTestResult, setAiTestResult] = useState('');
+  const [aiTestError, setAiTestError] = useState('');
+  const [isTestingAI, setIsTestingAI] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -90,12 +94,62 @@ const MinimalDashboard: React.FC = () => {
     }
   };
 
+  const addNewProduct = async () => {
+    const newProduct: Product = {
+      id: Date.now().toString(), // Temporary ID
+      name: 'New Product',
+      description: 'Product description',
+      price_jod: 10.0,
+      stock_quantity: 1,
+      status: 'active'
+    };
+    
+    setProducts(prev => [...prev, newProduct]);
+    
+    // TODO: Call API to add product to backend
+    console.log('Adding new product:', newProduct);
+  };
+
   const saveBusinessRules = async () => {
     try {
       // In a real implementation, this would call the API
       alert('Business rules saved successfully!');
     } catch (error) {
       console.error('Error saving business rules:', error);
+    }
+  };
+
+  const testAIResponse = async () => {
+    try {
+      setIsTestingAI(true);
+      setAiTestResult('');
+      setAiTestError('');
+      
+      // Call backend AI test endpoint
+      const response = await fetch('https://igshop-api.azurewebsites.net/backend-api/ai/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: testMessage,
+          business_rules: businessRules,
+          products: products
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      setAiTestResult(result.response || 'No response received');
+      
+    } catch (error) {
+      console.error('AI test error:', error);
+      setAiTestError(error instanceof Error ? error.message : 'Unknown error occurred');
+    } finally {
+      setIsTestingAI(false);
     }
   };
 
@@ -124,6 +178,7 @@ const MinimalDashboard: React.FC = () => {
               { id: 'overview', label: 'Overview' },
               { id: 'products', label: 'Products' },
               { id: 'rules', label: 'Business Rules' },
+              { id: 'ai-test', label: 'AI Test' },
               { id: 'conversations', label: 'Conversations' }
             ].map(tab => (
               <button
@@ -210,12 +265,25 @@ const MinimalDashboard: React.FC = () => {
         {/* Products Tab */}
         {activeTab === 'products' && (
           <div className="bg-white rounded-lg shadow">
-            <div className="p-6 border-b">
+            <div className="p-6 border-b flex justify-between items-center">
               <h3 className="text-lg font-semibold">Product Catalog</h3>
+              <button
+                onClick={addNewProduct}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center"
+              >
+                <span className="mr-2">+</span>
+                Add Product
+              </button>
             </div>
             <div className="p-6">
-              <div className="space-y-4">
-                {products.map(product => (
+              {products.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p className="text-lg mb-2">No products yet</p>
+                  <p>Click "Add Product" to create your first product</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {products.map(product => (
                   <div key={product.id} className="border rounded-lg p-4">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div>
@@ -266,8 +334,55 @@ const MinimalDashboard: React.FC = () => {
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       />
                     </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* AI Test Tab */}
+        {activeTab === 'ai-test' && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b">
+              <h3 className="text-lg font-semibold">AI Test Playground</h3>
+              <p className="text-gray-600 mt-2">Test your AI assistant with full context (products, business rules, etc.)</p>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Test Message</label>
+                  <textarea
+                    value={testMessage}
+                    onChange={(e) => setTestMessage(e.target.value)}
+                    rows={3}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Type a customer message to test how your AI would respond..."
+                  />
+                </div>
+                
+                <button
+                  onClick={testAIResponse}
+                  disabled={!testMessage.trim() || isTestingAI}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isTestingAI ? 'Testing...' : 'Test AI Response'}
+                </button>
+                
+                {aiTestResult && (
+                  <div className="mt-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
+                    <h4 className="font-medium text-blue-900 mb-2">AI Response:</h4>
+                    <p className="text-blue-800">{aiTestResult}</p>
                   </div>
-                ))}
+                )}
+                
+                {aiTestError && (
+                  <div className="mt-6 p-4 bg-red-50 border-l-4 border-red-500 rounded">
+                    <h4 className="font-medium text-red-900 mb-2">Error:</h4>
+                    <p className="text-red-800">{aiTestError}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
