@@ -4,6 +4,7 @@
 
 import logging
 import json
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -196,11 +197,15 @@ async def handle_instagram_webhook_direct(request: Request):
 @app.get("/webhooks/health")
 async def webhook_health_direct():
     """Webhook health check"""
+    logger.info("🔍 Webhook health endpoint called")
     return {
         "status": "healthy",
-        "service": "instagram_webhook",
+        "service": "instagram_webhook", 
         "webhook_url": "/webhooks/instagram",
-        "verification_token": "configured"
+        "verification_token": "configured",
+        "timestamp": str(datetime.now()),
+        "router_imported": routers_imported,
+        "import_error": import_error
     }
 
 # Health check endpoint
@@ -341,6 +346,17 @@ async def test_endpoint():
         "message": "Test endpoint working",
         "routers_imported": routers_imported,
         "import_error": import_error
+    }
+
+@app.get("/webhook-test")
+async def webhook_test_endpoint():
+    """Test endpoint to verify webhook functionality is available"""
+    logger.info("🔍 Webhook test endpoint called")
+    return {
+        "message": "Webhook routes are working",
+        "webhook_endpoints": ["/webhooks/instagram", "/webhooks/health"],
+        "timestamp": str(datetime.now()),
+        "status": "ok"
     }
 
 # Instagram OAuth endpoint (workaround)
