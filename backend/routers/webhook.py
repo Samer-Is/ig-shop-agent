@@ -153,9 +153,9 @@ async def process_messaging_event(event: Dict[str, Any], page_id: str, db: Datab
             merchant["id"]
         )
         
-        # Get conversation history
+        # Get conversation history (last 20 messages as per consultant recommendations)
         conversation_history = await db.fetch_all(
-            "SELECT message, is_ai_response, created_at FROM conversations WHERE user_id = $1 AND customer = $2 ORDER BY created_at DESC LIMIT 10",
+            "SELECT message, is_ai_response, created_at FROM conversations WHERE user_id = $1 AND customer = $2 ORDER BY created_at DESC LIMIT 20",
             merchant["id"],
             sender_id
         )

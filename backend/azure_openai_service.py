@@ -58,24 +58,31 @@ class AzureOpenAIService:
     ) -> str:
         """Generate AI response with context"""
         try:
+            # Check if human escalation is needed
+            if self._detect_escalation_needed(message, conversation_history):
+                logger.info("Human escalation detected - flagging conversation")
+                return "أنا فاهم عليك تماماً والموضوع مهم. رح أخلي واحد من زملائي يتابع معك شخصياً عشان يحل المشكلة بأسرع وقت. [NEEDS_HUMAN_ATTENTION]"
             # Build system prompt with enhanced context
             system_prompt = self._build_system_prompt(
                 catalog_items or [], 
                 customer_context, 
                 business_rules, 
-                knowledge_base
+                knowledge_base,
+                conversation_history
             )
             
             # Build conversation context
             messages = [{"role": "system", "content": system_prompt}]
             
-            # Add conversation history (last 5 messages)
+            # Add conversation history (last 20 messages as per consultant recommendations)
             if conversation_history:
-                recent_history = conversation_history[-5:]
+                # Reverse to get chronological order (oldest to newest)
+                recent_history = list(reversed(conversation_history))
                 for msg in recent_history:
+                    role = "assistant" if msg.get('is_ai_response') else "user"
                     messages.append({
-                        "role": "user" if not msg.get('ai_generated') else "assistant",
-                        "content": msg['text']
+                        "role": role,
+                        "content": msg.get('message', '')
                     })
             
             # Add current message
@@ -97,112 +104,177 @@ class AzureOpenAIService:
             logger.error(f"Error generating AI response: {e}")
             return self._get_fallback_response()
     
-    def _build_system_prompt(self, catalog_items: List[Dict], context: Dict = None, business_rules: Dict = None, knowledge_base: List[Dict] = None) -> str:
-        """Build comprehensive system prompt for AI with universal base and merchant-specific context"""
+    def _build_system_prompt(self, catalog_items: List[Dict], context: Dict = None, business_rules: Dict = None, knowledge_base: List[Dict] = None, conversation_history: List[Dict] = None) -> str:
+        """Build comprehensive system prompt based on consultant recommendations (Version 2.0)"""
         
-        # Universal base prompt - works for any domain/business
-        prompt = """You are an intelligent customer service assistant specialized in helping customers through Instagram Direct Messages.
+        # Enhanced Universal System Prompt - Version 2.0
+        prompt = """[SYSTEM_IDENTITY]
+You are a world-class conversational AI assistant for an e-commerce brand on Instagram. Your name is not "AI" or "bot"; you are a member of the team. Your persona is cool, friendly, and professional, like a helpful store insider who knows everything about the products and business. You are highly attentive to detail and your primary goal is to provide an exceptionally human-like and helpful customer experience.
 
-CORE CAPABILITIES:
-• Multilingual communication (primarily English and Arabic)
-• Product information and recommendations
-• Order processing and customer support
-• Business inquiry handling
-• Professional and friendly assistance
+[PRIMARY_DIRECTIVE]
+Your absolute, non-negotiable golden rule is: DO NOT ASSUME. DO NOT HALLUCINATE. DO NOT MAKE UP ANSWERS.
 
-RESPONSE GUIDELINES:
-1. Always respond in the same language the customer uses
-2. Be helpful, professional, and conversational
-3. Provide accurate information based on available context
-4. For product inquiries: Check available inventory and provide detailed information
-5. For orders: Collect all required information (product, quantity, customer details, delivery address)
-6. If information is unavailable: Politely direct to appropriate resources
-7. Maintain conversation context and remember previous interactions
+Every single piece of information you provide to a customer must be derived exclusively from the data provided to you for the specific merchant. This data includes:
+
+[Merchant Business Rules & Info] (Working hours, shipping policy, etc.)
+[Product Catalog] (Item names, descriptions, prices, stock, media links.)
+[Current Conversation History] (The last 20 messages.)
+
+If the answer to a customer's question is not found in the provided data, you MUST NOT invent an answer. Instead, you must politely state that you don't have that specific information and offer to help with something else.
+
+Example of a safe response: "ما عندي جواب أكيد على هاد السؤال للأسف، بس بقدر أساعدك بشي تاني؟" (Unfortunately, I don't have a definite answer for that question, but can I help with something else?)
+
+[COMMUNICATION_PROTOCOL]
+Primary Language: Your default communication language is Jordanian Arabic (اللهجة الأردنية). Your tone should be natural and conversational.
+
+Language Switching: Analyze the customer's language. If the customer is writing primarily in English, you must switch and reply in fluent, natural English. If they mix, default back to Jordanian Arabic.
+
+Human-like Typing: Type like a real person. Use natural-sounding phrases, appropriate emojis (👍, 😄, 🙏), and conversational flow. Avoid robotic lists and jargon.
+
+No Field Names: Do NOT expose the internal data field names. Weave the information into natural sentences.
+
+ROBOTIC (DO NOT DO THIS):
+المنتج: جاكيت فيراري. الوصف: جاكيت أحمر. السعر: 10 دينار. الرابط: [link]
+
+HUMAN-LIKE (DO THIS):
+أهلاً! أكيد، الجاكيت الفيراري الأحمر موجود عنا ومواصفاته ممتازة. سعره 10 دنانير بس. (Hello! Of course, the red Ferrari jacket is available and its specs are excellent. It costs only 10 JOD.)
+
+[CONTEXT & ACTION_RULES]
+Full Context Awareness: Before EVERY response, you MUST silently review the last 20 messages in the [Current Conversation History]. Understand the context completely. Is this a follow-up question? Are they changing their mind? Your answer must be relevant to the ongoing chat.
+
+Knowledge Base is Truth: When a question is asked, your internal thought process must be: (1) Scan [Merchant Business Rules]. (2) Scan [Product Catalog]. (3) Formulate an answer based only on what you find.
+
+Handling Media Links: The media_link in the product catalog is a URL to a photo or video.
+
+You MUST NOT send this link unless the customer explicitly asks for a "photo", "image", "صورة", "أشوف شكله", or a similar visual request for a specific item.
+
+When asked, present the link naturally. Example: "أكيد، هاي صورة للجاكيت عشان تشوفه أوضح: [link]" (Of course, here is a picture of the jacket so you can see it more clearly: [link])
+
+[PROACTIVE_ASSISTANCE_PROTOCOL]
+Suggest Complements: If a customer is interested in a product, you can proactively suggest another item from the catalog that complements it.
+
+Example: "حلو كثير هاد القميص! على فكرة، في عنا بنطلون جينز لونه أسود بلبق معه بشكل خرافي، مهتم تشوفه؟" (This shirt is very nice! By the way, we have black jeans that would go with it perfectly, interested in seeing them?)
+
+Clarify Ambiguity: If a customer's request is vague (e.g., "do you have jackets?"), ask clarifying questions to narrow down what they want before listing everything.
+
+Example: "أكيد عنا جاكيتات! بتدور على لون معين أو ستايل معين؟ صيفي ولا شتوي؟" (Of course we have jackets! Are you looking for a specific color or style? For summer or winter?)
+
+[HUMAN_ESCALATION_PROTOCOL]
+Detect Critical Issues: You must constantly analyze the customer's sentiment. If a customer expresses high levels of anger, frustration, or confusion, or asks for something clearly outside your scope (e.g., a complex complaint, wholesale inquiries), you must initiate a handover.
+
+Handover Procedure:
+Politely inform the customer you are getting a human specialist.
+
+Example: "أنا فاهم عليك تماماً والموضوع مهم. رح أخلي واحد من زملائي يتابع معك شخصياً عشان يحل المشكلة بأسرع وقت." (I completely understand and the issue is important. I will have one of my colleagues follow up with you personally to solve the problem as quickly as possible.)
+
+In your internal response, you must include the special tag: [NEEDS_HUMAN_ATTENTION] so the system can flag the conversation.
 
 """
-        
-        # Add business-specific information
+
+        # Add merchant-specific business rules
         if business_rules:
-            prompt += "\n=== BUSINESS INFORMATION ===\n"
-            
+            prompt += "\n[MERCHANT_BUSINESS_RULES]\n"
             if business_rules.get('business_name'):
                 prompt += f"Business Name: {business_rules['business_name']}\n"
-            
             if business_rules.get('business_type'):
                 prompt += f"Business Type: {business_rules['business_type']}\n"
-            
             if business_rules.get('working_hours'):
                 prompt += f"Working Hours: {business_rules['working_hours']}\n"
-                
             if business_rules.get('delivery_info'):
                 prompt += f"Delivery Information: {business_rules['delivery_info']}\n"
-                
             if business_rules.get('payment_methods'):
                 prompt += f"Payment Methods: {business_rules['payment_methods']}\n"
-                
             if business_rules.get('return_policy'):
                 prompt += f"Return Policy: {business_rules['return_policy']}\n"
-                
             if business_rules.get('terms_conditions'):
                 prompt += f"Terms & Conditions: {business_rules['terms_conditions']}\n"
-                
             if business_rules.get('contact_info'):
                 prompt += f"Contact Information: {business_rules['contact_info']}\n"
-                
             if business_rules.get('custom_prompt'):
-                prompt += f"\nSpecial Instructions: {business_rules['custom_prompt']}\n"
-                
+                prompt += f"Additional Instructions: {business_rules['custom_prompt']}\n"
             if business_rules.get('ai_instructions'):
                 prompt += f"AI Behavior Guidelines: {business_rules['ai_instructions']}\n"
-            
-            prompt += "\n"
-        
-        # Add knowledge base information
-        if knowledge_base:
-            prompt += "=== KNOWLEDGE BASE ===\n"
-            for item in knowledge_base[:5]:  # Limit to avoid token limit
-                if item.get('title') and item.get('content'):
-                    prompt += f"• {item['title']}:\n{item['content'][:300]}...\n\n"
-        
+            if business_rules.get('language_preference'):
+                prompt += f"Language Preference: {business_rules['language_preference']}\n"
+            if business_rules.get('response_tone'):
+                prompt += f"Response Tone: {business_rules['response_tone']}\n"
+
         # Add product catalog
         if catalog_items:
-            prompt += "=== AVAILABLE PRODUCTS ===\n"
-            for item in catalog_items[:15]:  # Increased limit for better context
-                product_info = f"• {item.get('name', 'Unknown Product')}"
-                
-                if item.get('price_jod'):
-                    product_info += f" - {item.get('price_jod')} JOD"
-                    
+            prompt += "\n[PRODUCT_CATALOG]\n"
+            for item in catalog_items:
+                prompt += f"- {item.get('name', 'Unknown Product')}"
                 if item.get('description'):
-                    product_info += f"\n  Description: {item['description'][:100]}..."
-                    
+                    prompt += f": {item['description']}"
+                if item.get('price_jod'):
+                    prompt += f" - Price: {item['price_jod']} JOD"
+                if item.get('stock_quantity') is not None:
+                    stock_status = "In Stock" if item['stock_quantity'] > 0 else "Out of Stock"
+                    prompt += f" - Stock: {stock_status} ({item['stock_quantity']} available)"
                 if item.get('category'):
-                    product_info += f"\n  Category: {item['category']}"
-                    
+                    prompt += f" - Category: {item['category']}"
                 if item.get('product_link'):
-                    product_info += f"\n  Purchase Link: {item['product_link']}"
-                    
-                stock_status = item.get('stock_quantity', 0)
-                if stock_status > 0:
-                    product_info += f"\n  Stock: {stock_status} available"
-                else:
-                    product_info += f"\n  Stock: Out of stock"
-                    
-                prompt += product_info + "\n\n"
-        
-        # Final instructions
-        prompt += """
-=== IMPORTANT REMINDERS ===
-• Always check product availability before confirming orders
-• For out-of-stock items, suggest alternatives or notify about restocking
-• Be proactive in offering help and product recommendations
-• Maintain a friendly, professional tone that reflects the business personality
-• If you cannot find specific information, acknowledge it and offer to connect them with support
+                    prompt += f" - Media Link: {item['product_link']}"
+                prompt += "\n"
 
-Remember: You represent this business, so ensure every interaction enhances the customer experience and builds trust.
-"""
-        
+        # Add knowledge base
+        if knowledge_base:
+            prompt += "\n[KNOWLEDGE_BASE]\n"
+            for kb_item in knowledge_base:
+                prompt += f"- {kb_item.get('title', 'Untitled')}: {kb_item.get('content', '')}\n"
+
+        # Add current context
+        if context:
+            prompt += "\n[CURRENT_CONTEXT]\n"
+            if context.get('sender_id'):
+                prompt += f"Customer ID: {context['sender_id']}\n"
+            if context.get('page_id'):
+                prompt += f"Page ID: {context['page_id']}\n"
+            if context.get('conversation_history'):
+                prompt += f"Previous Messages: {len(context['conversation_history'])} messages in history\n"
+                
+        # Add conversation history details for context awareness
+        if conversation_history:
+            prompt += f"\n[CONVERSATION_HISTORY]\n"
+            prompt += f"Last {len(conversation_history)} messages between customer and assistant:\n"
+            # Show recent history for context (chronological order)
+            for i, msg in enumerate(reversed(conversation_history[-10:])):  # Show last 10 for context
+                role = "Customer" if not msg.get('is_ai_response') else "Assistant"
+                prompt += f"{i+1}. {role}: {msg.get('message', '')[:100]}...\n"
+
+        prompt += "\n[FINAL_REMINDER]\nRemember: Be human, be helpful, be accurate. Only use the information provided above. If you don't know something, admit it and offer alternative help. Default to Jordanian Arabic unless the customer uses English."
+
         return prompt
+    
+    def _detect_escalation_needed(self, message: str, conversation_history: List[Dict] = None) -> bool:
+        """Detect if human escalation is needed based on message content and conversation context"""
+        
+        # Keywords that indicate escalation needs
+        escalation_keywords = [
+            'angry', 'frustrated', 'complaint', 'manager', 'supervisor', 'refund', 'cancel', 'problem',
+            'issue', 'wrong', 'mistake', 'error', 'disappointed', 'unsatisfied', 'unhappy',
+            'غاضب', 'مشكلة', 'خطأ', 'مدير', 'شكوى', 'استرداد', 'إلغاء', 'مشاكل'
+        ]
+        
+        message_lower = message.lower()
+        
+        # Check for escalation keywords
+        for keyword in escalation_keywords:
+            if keyword in message_lower:
+                return True
+        
+        # Check for repeated similar messages (customer frustration)
+        if conversation_history and len(conversation_history) >= 4:
+            recent_customer_messages = [
+                msg.get('message', '') for msg in conversation_history[-4:] 
+                if not msg.get('is_ai_response')
+            ]
+            
+            # If customer sent similar messages repeatedly, escalate
+            if len(set(recent_customer_messages)) <= 2 and len(recent_customer_messages) >= 3:
+                return True
+        
+        return False
     
     def _get_fallback_response(self) -> str:
         """Get fallback response when AI fails"""
