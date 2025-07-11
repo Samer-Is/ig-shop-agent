@@ -137,7 +137,19 @@ async def process_messaging_event(event: Dict[str, Any], page_id: str, db: Datab
             
         # Get catalog items for context
         catalog_items = await db.fetch_all(
-            "SELECT name, description, price_jod, stock_quantity FROM catalog_items WHERE user_id = $1",
+            "SELECT name, description, price_jod, stock_quantity, product_link, category FROM catalog_items WHERE user_id = $1",
+            merchant["id"]
+        )
+        
+        # Get business rules for context
+        business_rules = await db.fetch_one(
+            "SELECT business_name, business_type, working_hours, delivery_info, payment_methods, return_policy, terms_conditions, contact_info, custom_prompt, ai_instructions, language_preference, response_tone FROM business_rules WHERE user_id = $1",
+            merchant["id"]
+        )
+        
+        # Get knowledge base items for context
+        knowledge_base = await db.fetch_all(
+            "SELECT title, content FROM kb_documents WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10",
             merchant["id"]
         )
         
@@ -148,11 +160,14 @@ async def process_messaging_event(event: Dict[str, Any], page_id: str, db: Datab
             sender_id
         )
         
-        # Generate AI response
+        # Generate AI response with full context
         ai_response = await ai_service.generate_response(
             message=message_text,
             catalog_items=catalog_items,
-            conversation_history=conversation_history
+            conversation_history=conversation_history,
+            customer_context={"sender_id": sender_id, "page_id": page_id},
+            business_rules=business_rules,
+            knowledge_base=knowledge_base
         )
         
         if ai_response:

@@ -19,7 +19,7 @@ from database import get_database, init_database
 
 # Import routers
 try:
-    from routers import auth, conversations, orders, catalog, kb, webhook, analytics
+    from routers import auth, conversations, orders, catalog, kb, webhook, analytics, business
     routers_imported = True
     import_error = None
 except Exception as e:
@@ -83,6 +83,7 @@ if routers_imported:
         app.include_router(orders.router, prefix="/api/orders")
         app.include_router(catalog.router, prefix="/api/catalog")
         app.include_router(kb.router, prefix="/api/kb")
+        app.include_router(business.router, prefix="/api")
         app.include_router(webhook.router)
         logger.info("✅ Webhook router included successfully")
         
@@ -145,6 +146,31 @@ async def backend_conversations():
     except Exception as e:
         logger.error(f"Backend conversations error: {e}")
         return []
+
+@app.get("/backend-api/business/rules")
+async def backend_business_rules():
+    """Backend API business rules endpoint"""
+    try:
+        from routers.business import get_business_rules
+        from database import get_database
+        db = await get_database()
+        return await get_business_rules(db)
+    except Exception as e:
+        logger.error(f"Backend business rules error: {e}")
+        return {
+            "business_name": None,
+            "business_type": None,
+            "working_hours": None,
+            "delivery_info": None,
+            "payment_methods": None,
+            "return_policy": None,
+            "terms_conditions": None,
+            "contact_info": None,
+            "custom_prompt": None,
+            "ai_instructions": None,
+            "language_preference": "en,ar",
+            "response_tone": "professional"
+        }
 
 @app.get("/backend-api/debug/config")
 async def debug_config():

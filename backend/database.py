@@ -201,6 +201,27 @@ class DatabaseService:
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
             
+            -- Business rules and configuration table
+            CREATE TABLE IF NOT EXISTS business_rules (
+                id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                business_name TEXT,
+                business_type TEXT,
+                working_hours TEXT,
+                delivery_info TEXT,
+                payment_methods TEXT,
+                return_policy TEXT,
+                terms_conditions TEXT,
+                contact_info TEXT,
+                custom_prompt TEXT,
+                ai_instructions TEXT,
+                language_preference TEXT DEFAULT 'en,ar',
+                response_tone TEXT DEFAULT 'professional',
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                UNIQUE(user_id)
+            );
+            
             -- Conversations table
             CREATE TABLE IF NOT EXISTS conversations (
                 id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
