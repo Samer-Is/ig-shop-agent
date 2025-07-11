@@ -162,6 +162,62 @@ async def debug_config():
     except Exception as e:
         return {"error": str(e)}
 
+@app.post("/backend-api/ai/test-detailed")
+async def backend_ai_test_detailed(request: Request):
+    """Detailed AI test endpoint with error information"""
+    try:
+        from azure_openai_service import AzureOpenAIService
+        from openai import OpenAI
+        
+        # Parse request data
+        data = await request.json()
+        message = data.get('message', 'Hello')
+        
+        logger.info(f"Testing AI with message: {message}")
+        
+        # Test OpenAI client directly
+        try:
+            client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            logger.info(f"OpenAI client created successfully")
+            
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": message}
+                ],
+                max_tokens=50,
+                temperature=0.7
+            )
+            
+            ai_response = response.choices[0].message.content.strip()
+            logger.info(f"OpenAI response received: {ai_response[:50]}...")
+            
+            return {
+                "success": True,
+                "response": ai_response,
+                "model_used": "gpt-4o",
+                "api_key_length": len(settings.OPENAI_API_KEY)
+            }
+            
+        except Exception as openai_error:
+            logger.error(f"OpenAI API error: {openai_error}")
+            return {
+                "success": False,
+                "error": str(openai_error),
+                "error_type": type(openai_error).__name__,
+                "api_key_set": bool(settings.OPENAI_API_KEY),
+                "api_key_length": len(settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else 0
+            }
+        
+    except Exception as e:
+        logger.error(f"General error in AI test: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
 @app.post("/backend-api/ai/test")
 async def backend_ai_test(request: Request):
     """Backend API AI test endpoint"""
