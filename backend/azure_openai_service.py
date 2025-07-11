@@ -15,18 +15,37 @@ class AzureOpenAIService:
     """Simplified OpenAI service for production"""
     
     def __init__(self):
-        """Initialize OpenAI client"""
-        # Check if API key is available
-        if not settings.OPENAI_API_KEY:
-            logger.error("OPENAI_API_KEY environment variable is not set!")
-            raise ValueError("OpenAI API key is required but not configured")
-        
-        # Use OpenAI API
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        self.model = "gpt-4o"
-        logger.info("OpenAI service initialized successfully")
-        logger.info(f"Using model: {self.model}")
-        logger.info(f"API key configured: {'***' + settings.OPENAI_API_KEY[-4:] if len(settings.OPENAI_API_KEY) > 4 else 'MISSING'}")
+        """Initialize Azure OpenAI client"""
+        # Check if Azure OpenAI is configured
+        if settings.use_azure_openai:
+            logger.info("Using Azure OpenAI service")
+            if not settings.AZURE_OPENAI_ENDPOINT or not settings.AZURE_OPENAI_API_KEY:
+                logger.error("Azure OpenAI endpoint or API key not configured!")
+                raise ValueError("Azure OpenAI configuration is incomplete")
+            
+            # Use Azure OpenAI
+            from openai import AzureOpenAI
+            self.client = AzureOpenAI(
+                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                api_key=settings.AZURE_OPENAI_API_KEY,
+                api_version=settings.AZURE_OPENAI_API_VERSION
+            )
+            self.model = settings.AZURE_OPENAI_DEPLOYMENT_NAME
+            logger.info(f"Azure OpenAI service initialized with endpoint: {settings.AZURE_OPENAI_ENDPOINT}")
+            
+        else:
+            logger.info("Using regular OpenAI service")
+            # Check if API key is available
+            if not settings.OPENAI_API_KEY:
+                logger.error("OPENAI_API_KEY environment variable is not set!")
+                raise ValueError("OpenAI API key is required but not configured")
+            
+            # Use OpenAI API
+            from openai import OpenAI
+            self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            self.model = "gpt-4o"
+            
+        logger.info(f"AI service initialized successfully using model: {self.model}")
     
     async def generate_response(
         self, 

@@ -154,10 +154,13 @@ async def debug_config():
             "openai_api_key_set": bool(settings.OPENAI_API_KEY),
             "openai_api_key_length": len(settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else 0,
             "azure_openai_endpoint_set": bool(settings.AZURE_OPENAI_ENDPOINT),
+            "azure_openai_api_key_set": bool(settings.AZURE_OPENAI_API_KEY),
+            "azure_openai_deployment": settings.AZURE_OPENAI_DEPLOYMENT_NAME,
+            "use_azure_openai": settings.use_azure_openai,
             "meta_app_id_set": bool(settings.META_APP_ID),
             "database_url_set": bool(settings.DATABASE_URL),
             "environment": settings.ENVIRONMENT,
-            "cors_origins": settings.CORS_ORIGINS
+            "cors_origins": settings.CORS_ORIGINS[:2]  # Show only first 2 for brevity
         }
     except Exception as e:
         return {"error": str(e)}
@@ -167,7 +170,6 @@ async def backend_ai_test_detailed(request: Request):
     """Detailed AI test endpoint with error information"""
     try:
         from azure_openai_service import AzureOpenAIService
-        from openai import OpenAI
         
         # Parse request data
         data = await request.json()
@@ -175,13 +177,29 @@ async def backend_ai_test_detailed(request: Request):
         
         logger.info(f"Testing AI with message: {message}")
         
-        # Test OpenAI client directly
+        # Test Azure OpenAI or regular OpenAI based on configuration
         try:
-            client = OpenAI(api_key=settings.OPENAI_API_KEY)
-            logger.info(f"OpenAI client created successfully")
+            if settings.use_azure_openai:
+                logger.info("Testing with Azure OpenAI")
+                from openai import AzureOpenAI
+                client = AzureOpenAI(
+                    azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                    api_key=settings.AZURE_OPENAI_API_KEY,
+                    api_version=settings.AZURE_OPENAI_API_VERSION
+                )
+                model = settings.AZURE_OPENAI_DEPLOYMENT_NAME
+                service_type = "Azure OpenAI"
+            else:
+                logger.info("Testing with regular OpenAI")
+                from openai import OpenAI
+                client = OpenAI(api_key=settings.OPENAI_API_KEY)
+                model = "gpt-4o"
+                service_type = "OpenAI"
+            
+            logger.info(f"Client created successfully for {service_type}")
             
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model=model,
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": message}
@@ -191,23 +209,26 @@ async def backend_ai_test_detailed(request: Request):
             )
             
             ai_response = response.choices[0].message.content.strip()
-            logger.info(f"OpenAI response received: {ai_response[:50]}...")
+            logger.info(f"{service_type} response received: {ai_response[:50]}...")
             
             return {
                 "success": True,
                 "response": ai_response,
-                "model_used": "gpt-4o",
-                "api_key_length": len(settings.OPENAI_API_KEY)
+                "service_type": service_type,
+                "model_used": model,
+                "use_azure_openai": settings.use_azure_openai
             }
             
         except Exception as openai_error:
-            logger.error(f"OpenAI API error: {openai_error}")
+            logger.error(f"AI API error: {openai_error}")
             return {
                 "success": False,
                 "error": str(openai_error),
                 "error_type": type(openai_error).__name__,
-                "api_key_set": bool(settings.OPENAI_API_KEY),
-                "api_key_length": len(settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else 0
+                "service_type": "Azure OpenAI" if settings.use_azure_openai else "OpenAI",
+                "use_azure_openai": settings.use_azure_openai,
+                "azure_endpoint_set": bool(settings.AZURE_OPENAI_ENDPOINT),
+                "azure_api_key_set": bool(settings.AZURE_OPENAI_API_KEY)
             }
         
     except Exception as e:
