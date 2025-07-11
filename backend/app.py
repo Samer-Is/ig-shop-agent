@@ -146,6 +146,22 @@ async def backend_conversations():
         logger.error(f"Backend conversations error: {e}")
         return []
 
+@app.get("/backend-api/debug/config")
+async def debug_config():
+    """Debug endpoint to check configuration - REMOVE IN PRODUCTION"""
+    try:
+        return {
+            "openai_api_key_set": bool(settings.OPENAI_API_KEY),
+            "openai_api_key_length": len(settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else 0,
+            "azure_openai_endpoint_set": bool(settings.AZURE_OPENAI_ENDPOINT),
+            "meta_app_id_set": bool(settings.META_APP_ID),
+            "database_url_set": bool(settings.DATABASE_URL),
+            "environment": settings.ENVIRONMENT,
+            "cors_origins": settings.CORS_ORIGINS
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.post("/backend-api/ai/test")
 async def backend_ai_test(request: Request):
     """Backend API AI test endpoint"""

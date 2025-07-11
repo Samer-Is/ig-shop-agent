@@ -16,10 +16,17 @@ class AzureOpenAIService:
     
     def __init__(self):
         """Initialize OpenAI client"""
+        # Check if API key is available
+        if not settings.OPENAI_API_KEY:
+            logger.error("OPENAI_API_KEY environment variable is not set!")
+            raise ValueError("OpenAI API key is required but not configured")
+        
         # Use OpenAI API
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         self.model = "gpt-4o"
-        logger.info("OpenAI service initialized")
+        logger.info("OpenAI service initialized successfully")
+        logger.info(f"Using model: {self.model}")
+        logger.info(f"API key configured: {'***' + settings.OPENAI_API_KEY[-4:] if len(settings.OPENAI_API_KEY) > 4 else 'MISSING'}")
     
     async def generate_response(
         self, 
