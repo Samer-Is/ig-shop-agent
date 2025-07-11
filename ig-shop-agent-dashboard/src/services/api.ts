@@ -56,7 +56,7 @@ export class ApiService {
 
   async getDashboardAnalytics() {
     try {
-      const response = await api.get('/analytics/dashboard');
+      const response = await api.get('/backend-api/analytics');
       return { data: response.data };
     } catch (error: any) {
       return { error: error.message };
@@ -75,6 +75,20 @@ export class ApiService {
   async getKnowledgeBase() {
     try {
       const response = await api.get('/kb');
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  }
+
+  async testAIResponse(message: string, businessRules?: any, products?: any[], knowledgeBase?: any[]) {
+    try {
+      const response = await api.post('/backend-api/ai/test', {
+        message,
+        business_rules: businessRules || {},
+        products: products || [],
+        knowledge_base: knowledgeBase || []
+      });
       return { data: response.data };
     } catch (error: any) {
       return { error: error.message };

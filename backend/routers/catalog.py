@@ -18,6 +18,7 @@ class CatalogItemCreate(BaseModel):
     category: Optional[str] = None
     stock_quantity: int = 0
     image_url: Optional[str] = None
+    product_link: Optional[str] = None
 
 class CatalogItemUpdate(BaseModel):
     name: Optional[str] = None
@@ -79,8 +80,8 @@ async def create_catalog_item(
         # Create database item
         await db.execute_query(
             """
-            INSERT INTO catalog_items (id, user_id, sku, name, description, price_jod, category, stock_quantity, media_url)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO catalog_items (id, user_id, sku, name, description, price_jod, category, stock_quantity, media_url, product_link)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             """,
             item_id,
             "default-user",  # TODO: Get from auth context
@@ -90,7 +91,8 @@ async def create_catalog_item(
             item.price_jod,
             item.category,
             item.stock_quantity,
-            item.image_url or ""
+            item.image_url or "",
+            item.product_link or ""
         )
         
         # Enhance description with AI if needed

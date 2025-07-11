@@ -157,6 +157,7 @@ async def backend_ai_test(request: Request):
         message = data.get('message', '')
         business_rules = data.get('business_rules', {})
         products = data.get('products', [])
+        knowledge_base = data.get('knowledge_base', [])
         
         if not message:
             return {"error": "Message is required"}
@@ -164,18 +165,27 @@ async def backend_ai_test(request: Request):
         # Initialize AI service
         ai_service = AzureOpenAIService()
         
-        # Generate AI response with context
+        # Build enhanced context with knowledge base
+        enhanced_context = {
+            'products': products,
+            'business_rules': business_rules,
+            'knowledge_base': knowledge_base
+        }
+        
+        # Generate AI response with enhanced context
         ai_response = await ai_service.generate_response(
             message=message,
             catalog_items=products,
             conversation_history=[],
-            business_rules=business_rules
+            business_rules=business_rules,
+            knowledge_base=knowledge_base
         )
         
         return {
             "response": ai_response,
             "context": {
                 "products_count": len(products),
+                "knowledge_items_count": len(knowledge_base),
                 "business_rules_provided": bool(business_rules),
                 "message_length": len(message)
             }

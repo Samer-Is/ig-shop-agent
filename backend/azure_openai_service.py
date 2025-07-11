@@ -26,12 +26,19 @@ class AzureOpenAIService:
         message: str, 
         catalog_items: List[Dict] = None,
         conversation_history: List[Dict] = None,
-        customer_context: Dict = None
+        customer_context: Dict = None,
+        business_rules: Dict = None,
+        knowledge_base: List[Dict] = None
     ) -> str:
         """Generate AI response with context"""
         try:
-            # Build system prompt
-            system_prompt = self._build_system_prompt(catalog_items or [], customer_context)
+            # Build system prompt with enhanced context
+            system_prompt = self._build_system_prompt(
+                catalog_items or [], 
+                customer_context, 
+                business_rules, 
+                knowledge_base
+            )
             
             # Build conversation context
             messages = [{"role": "system", "content": system_prompt}]
@@ -64,7 +71,7 @@ class AzureOpenAIService:
             logger.error(f"Error generating AI response: {e}")
             return self._get_fallback_response()
     
-    def _build_system_prompt(self, catalog_items: List[Dict], context: Dict = None) -> str:
+    def _build_system_prompt(self, catalog_items: List[Dict], context: Dict = None, business_rules: Dict = None, knowledge_base: List[Dict] = None) -> str:
         """Build system prompt for AI"""
         
         prompt = """You are a helpful shopping assistant for an Instagram store in Jordan.
@@ -79,6 +86,27 @@ Guidelines:
 
 """
         
+        # Add business rules if provided
+        if business_rules:
+            prompt += "Business Information:\n"
+            if business_rules.get('working_hours'):
+                prompt += f"Working Hours: {business_rules['working_hours']}\n"
+            if business_rules.get('terms_conditions'):
+                prompt += f"Terms & Conditions: {business_rules['terms_conditions']}\n"
+            if business_rules.get('custom_prompt'):
+                prompt += f"Special Instructions: {business_rules['custom_prompt']}\n"
+            if business_rules.get('ai_instructions'):
+                prompt += f"AI Guidelines: {business_rules['ai_instructions']}\n"
+            prompt += "\n"
+        
+        # Add knowledge base information
+        if knowledge_base:
+            prompt += "Additional Knowledge Base:\n"
+            for item in knowledge_base[:5]:  # Limit to 5 items to avoid token limit
+                if item.get('title') and item.get('content'):
+                    prompt += f"- {item['title']}: {item['content'][:200]}...\n"
+            prompt += "\n"
+        
         # Add available products
         if catalog_items:
             prompt += "Available Products:\n"
@@ -86,6 +114,8 @@ Guidelines:
                 prompt += f"- {item.get('name', 'Unknown')}: {item.get('price_jod', 0)} JOD"
                 if item.get('description'):
                     prompt += f" - {item['description'][:50]}..."
+                if item.get('product_link'):
+                    prompt += f" [Link: {item['product_link']}]"
                 if item.get('stock_quantity', 0) > 0:
                     prompt += f" (Stock: {item['stock_quantity']})"
                 prompt += "\n"

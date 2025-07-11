@@ -164,6 +164,7 @@ class DatabaseService:
                 name TEXT NOT NULL,
                 price_jod DECIMAL(10,2) NOT NULL,
                 media_url TEXT NOT NULL DEFAULT '',
+                product_link TEXT DEFAULT '',
                 extras JSONB DEFAULT '{}',
                 description TEXT,
                 category TEXT,

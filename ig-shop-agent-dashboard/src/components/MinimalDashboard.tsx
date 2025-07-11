@@ -28,6 +28,7 @@ interface Product {
   price_jod: number;
   stock_quantity: number;
   status: string;
+  product_link?: string;
 }
 
 interface Conversation {
@@ -45,6 +46,14 @@ interface BusinessRules {
   ai_instructions: string;
 }
 
+interface KnowledgeBaseItem {
+  id: string;
+  title: string;
+  content: string;
+  type: 'document' | 'link' | 'text';
+  created_at: string;
+}
+
 const MinimalDashboard: React.FC = () => {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -55,6 +64,7 @@ const MinimalDashboard: React.FC = () => {
     custom_prompt: 'You are a helpful shop assistant.',
     ai_instructions: 'Be polite and helpful. Answer in Arabic or English based on customer language.'
   });
+  const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBaseItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [testMessage, setTestMessage] = useState('');
@@ -119,38 +129,71 @@ const MinimalDashboard: React.FC = () => {
     }
   };
 
-  const testAIResponse = async () => {
+  const testAI = async () => {
+    if (!testMessage.trim()) return;
+    
+    setIsTestingAI(true);
+    setAiTestResult('');
+    setAiTestError('');
+    
     try {
-      setIsTestingAI(true);
-      setAiTestResult('');
-      setAiTestError('');
+      const response = await apiService.testAIResponse(
+        testMessage, 
+        businessRules, 
+        products,
+        knowledgeBase
+      );
       
-      // Call backend AI test endpoint
-      const response = await fetch('https://igshop-api.azurewebsites.net/backend-api/ai/test', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: testMessage,
-          business_rules: businessRules,
-          products: products
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (response.error) {
+        setAiTestError(response.error);
+      } else {
+        setAiTestResult(response.data?.response || 'No response received');
       }
-      
-      const result = await response.json();
-      setAiTestResult(result.response || 'No response received');
-      
     } catch (error) {
-      console.error('AI test error:', error);
-      setAiTestError(error instanceof Error ? error.message : 'Unknown error occurred');
+      setAiTestError('Failed to test AI: ' + error);
     } finally {
       setIsTestingAI(false);
     }
+  };
+
+  const addKnowledgeItem = (type: 'document' | 'link' | 'text') => {
+    const newItem: KnowledgeBaseItem = {
+      id: Date.now().toString(),
+      title: '',
+      content: '',
+      type,
+      created_at: new Date().toISOString()
+    };
+    setKnowledgeBase(prev => [...prev, newItem]);
+  };
+
+  const updateKnowledgeItem = (id: string, updates: Partial<KnowledgeBaseItem>) => {
+    setKnowledgeBase(prev => prev.map(item => 
+      item.id === id ? { ...item, ...updates } : item
+    ));
+  };
+
+  const deleteKnowledgeItem = (id: string) => {
+    setKnowledgeBase(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      const newItem: KnowledgeBaseItem = {
+        id: Date.now().toString(),
+        title: file.name,
+        content: content,
+        type: 'document',
+        created_at: new Date().toISOString()
+      };
+      setKnowledgeBase(prev => [...prev, newItem]);
+    };
+    reader.readAsText(file);
   };
 
   if (loading) {
@@ -170,13 +213,14 @@ const MinimalDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Simple Navigation */}
+      {/* Tab Navigation */}
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="mb-6">
-          <nav className="flex space-x-4">
+        <div className="border-b">
+          <nav className="-mb-px flex space-x-8">
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'products', label: 'Products' },
+              { id: 'knowledge', label: 'Knowledge Base' },
               { id: 'rules', label: 'Business Rules' },
               { id: 'ai-test', label: 'AI Test' },
               { id: 'conversations', label: 'Conversations' }
@@ -334,10 +378,127 @@ const MinimalDashboard: React.FC = () => {
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       />
                     </div>
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-700">Product Link (URL)</label>
+                      <input
+                        type="url"
+                        value={product.product_link || ''}
+                        onChange={(e) => updateProduct(product.id, { product_link: e.target.value })}
+                        placeholder="https://example.com/product-page"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                    </div>
                     </div>
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Knowledge Base Tab */}
+        {activeTab === 'knowledge' && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b">
+              <h3 className="text-lg font-semibold">Knowledge Base</h3>
+              <p className="text-gray-600 mt-2">Upload documents, add website links, and create text content for your AI to reference</p>
+            </div>
+            <div className="p-6">
+              {/* Action Buttons */}
+              <div className="flex space-x-4 mb-6">
+                <button
+                  onClick={() => addKnowledgeItem('text')}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  Add Text Content
+                </button>
+                <button
+                  onClick={() => addKnowledgeItem('link')}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                >
+                  Add Website Link
+                </button>
+                <label className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 cursor-pointer">
+                  Upload Document
+                  <input
+                    type="file"
+                    accept=".txt,.pdf,.doc,.docx"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* Knowledge Items */}
+              <div className="space-y-4">
+                {knowledgeBase.map(item => (
+                  <div key={item.id} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-2 py-1 text-xs rounded ${
+                          item.type === 'document' ? 'bg-purple-100 text-purple-800' :
+                          item.type === 'link' ? 'bg-green-100 text-green-800' :
+                          'bg-blue-100 text-blue-800'
+                        }`}>
+                          {item.type.toUpperCase()}
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          {new Date(item.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => deleteKnowledgeItem(item.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        Delete
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                        <input
+                          type="text"
+                          value={item.title}
+                          onChange={(e) => updateKnowledgeItem(item.id, { title: e.target.value })}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          placeholder="Enter a descriptive title..."
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          {item.type === 'link' ? 'URL' : 'Content'}
+                        </label>
+                        {item.type === 'link' ? (
+                          <input
+                            type="url"
+                            value={item.content}
+                            onChange={(e) => updateKnowledgeItem(item.id, { content: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            placeholder="https://example.com"
+                          />
+                        ) : (
+                          <textarea
+                            value={item.content}
+                            onChange={(e) => updateKnowledgeItem(item.id, { content: e.target.value })}
+                            rows={item.type === 'document' ? 8 : 4}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            placeholder={item.type === 'document' ? 'Document content will appear here...' : 'Enter your text content...'}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {knowledgeBase.length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    <p>No knowledge base items yet.</p>
+                    <p className="text-sm mt-2">Add documents, links, or text content to help your AI provide better responses.</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -363,7 +524,7 @@ const MinimalDashboard: React.FC = () => {
                 </div>
                 
                 <button
-                  onClick={testAIResponse}
+                  onClick={testAI}
                   disabled={!testMessage.trim() || isTestingAI}
                   className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >

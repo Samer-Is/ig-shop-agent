@@ -84,19 +84,17 @@ async def get_analytics(db: DatabaseService = Depends(get_db)):
         )
         total_products = total_products_result["count"] if total_products_result else 0
         
-        active_products_result = await db.fetch_one(
-            "SELECT COUNT(*) as count FROM catalog_items WHERE is_active = true"
-        )
-        active_products = active_products_result["count"] if active_products_result else 0
+        # For now, assume all products are active since we don't have is_active column
+        active_products = total_products
         
         out_of_stock_result = await db.fetch_one(
             "SELECT COUNT(*) as count FROM catalog_items WHERE stock_quantity = 0"
         )
         out_of_stock = out_of_stock_result["count"] if out_of_stock_result else 0
         
-        # Get recent orders
+        # Get recent orders - fix column name from customer_name to customer
         recent_orders_result = await db.fetch_all(
-            "SELECT id, customer_name, total_amount, status, created_at FROM orders ORDER BY created_at DESC LIMIT 5"
+            "SELECT id, customer, total_amount, status, created_at FROM orders ORDER BY created_at DESC LIMIT 5"
         )
         
         recent_orders = []
@@ -104,7 +102,7 @@ async def get_analytics(db: DatabaseService = Depends(get_db)):
             for order in recent_orders_result:
                 recent_orders.append({
                     "id": order["id"],
-                    "customer_name": order["customer_name"],
+                    "customer_name": order["customer"],  # Map customer to customer_name for frontend
                     "total_amount": float(order["total_amount"]),
                     "status": order["status"],
                     "created_at": order["created_at"].isoformat() if order["created_at"] else "",
