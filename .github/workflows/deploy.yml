@@ -58,6 +58,11 @@ jobs:
             SCM_DO_BUILD_DURING_DEPLOYMENT=true \
             ENABLE_ORYX_BUILD=true \
             PYTHONPATH=/home/site/wwwroot \
+            DATABASE_HOST=igshop-postgres.postgres.database.azure.com \
+            DATABASE_USER=igshop \
+            DATABASE_PASSWORD=IgShop2024! \
+            DATABASE_NAME=igshop_db \
+            DATABASE_PORT=5432 \
             META_APP_ID="${{ secrets.META_APP_ID }}" \
             META_APP_SECRET="${{ secrets.META_APP_SECRET }}" \
             META_REDIRECT_URI=https://proud-rock-0d57f940f.2.azurestaticapps.net/login \
