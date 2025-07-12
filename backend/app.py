@@ -54,13 +54,16 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Database initialization failed: {e}")
         # Don't fail startup - let the app run and handle DB errors gracefully
     
-    # Initialize enterprise database with RLS
-    try:
-        await init_enterprise_database()
-        logger.info("✅ Enterprise database with RLS initialized successfully")
-    except Exception as e:
-        logger.error(f"❌ Enterprise database initialization failed: {e}")
-        # Don't fail startup - continue with basic database
+    # Initialize enterprise database with RLS (disabled in development)
+    if settings.ENVIRONMENT == "production":
+        try:
+            await init_enterprise_database()
+            logger.info("✅ Enterprise database with RLS initialized successfully")
+        except Exception as e:
+            logger.error(f"❌ Enterprise database initialization failed: {e}")
+            # Don't fail startup - continue with basic database
+    else:
+        logger.info("ℹ️ Enterprise database with RLS disabled in development mode")
     
     yield
     
@@ -84,11 +87,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add enterprise rate limiting middleware (first - before auth)
-app.add_middleware(EnterpriseRateLimitingMiddleware)
+# Add enterprise rate limiting middleware (first - before auth) - disabled in development
+if settings.ENVIRONMENT == "production":
+    app.add_middleware(EnterpriseRateLimitingMiddleware)
+    logger.info("✅ Enterprise rate limiting middleware enabled")
+else:
+    logger.info("ℹ️ Enterprise rate limiting middleware disabled in development mode")
 
-# Add authentication middleware
-app.add_middleware(AuthMiddleware, secret_key=settings.SECRET_KEY if hasattr(settings, 'SECRET_KEY') else "ig-shop-secret-key-2024")
+# Add authentication middleware - disabled in development for easier testing
+if settings.ENVIRONMENT == "production":
+    app.add_middleware(AuthMiddleware, secret_key=settings.SECRET_KEY if hasattr(settings, 'SECRET_KEY') else "ig-shop-secret-key-2024")
+    logger.info("✅ Authentication middleware enabled")
+else:
+    logger.info("ℹ️ Authentication middleware disabled in development mode")
 
 # Remove duplicate router inclusions and add direct backend-api routes
 if routers_imported:

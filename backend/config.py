@@ -7,6 +7,11 @@ Environment variables and settings management - Simplified without pydantic-sett
 
 import os
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file (look in parent directory)
+# Override existing environment variables with .env file values
+load_dotenv(dotenv_path="../.env", override=True)
 
 class Settings:
     """Simple settings class using environment variables"""

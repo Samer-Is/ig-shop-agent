@@ -57,12 +57,12 @@ jobs:
             FRONTEND_URL=https://proud-rock-0d57f940f.2.azurestaticapps.net \
             SCM_DO_BUILD_DURING_DEPLOYMENT=true \
             ENABLE_ORYX_BUILD=true \
-            PYTHONPATH=/home/site/wwwroot:/home/site/wwwroot/backend \
-            META_APP_ID=1209836027286065 \
-            META_APP_SECRET=f79b3350f43751d6139e1b29a232cbf3 \
+            PYTHONPATH=/home/site/wwwroot \
+            META_APP_ID="${{ secrets.META_APP_ID }}" \
+            META_APP_SECRET="${{ secrets.META_APP_SECRET }}" \
             META_REDIRECT_URI=https://proud-rock-0d57f940f.2.azurestaticapps.net/login \
-            META_WEBHOOK_VERIFY_TOKEN=igshop_webhook_verify_X_urON9ELnFHYIlEeRNZa8b2FXB-q5JamBwTOrHvV5M \
-            OPENAI_API_KEY=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
+            META_WEBHOOK_VERIFY_TOKEN="${{ secrets.META_WEBHOOK_VERIFY_TOKEN }}" \
+            OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
 
   # Frontend deployment is handled by azure-static-web-apps-proud-rock-0d57f940f.yml
   # deploy-frontend:

@@ -2,6 +2,7 @@
 """
 IG-Shop-Agent - Main Entry Point for Azure Web Apps
 This is the main entry point that Azure Web Apps will execute.
+Imports the FastAPI application from the backend directory.
 """
 
 import os
@@ -9,32 +10,46 @@ import sys
 import logging
 from pathlib import Path
 
-# Configure logging first
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
+def setup_backend_path():
+    """Setup the Python path to include the backend directory"""
+    current_dir = Path(__file__).parent
+    backend_dir = current_dir / "backend"
+    
+    if not backend_dir.exists():
+        raise ImportError(f"Backend directory not found at {backend_dir}")
+    
+    # Add backend directory to Python path
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    
+    logger.info(f"✅ Added backend directory to Python path: {backend_dir}")
+    return backend_dir
+
 def create_app():
-    """Create and configure the FastAPI application."""
+    """Create and configure the FastAPI application from backend"""
     try:
-        # Get the current directory
-        current_dir = Path(__file__).parent
-        logger.info(f"🔍 Current directory: {current_dir}")
+        # Setup backend path
+        backend_dir = setup_backend_path()
         
-        # Import from backend directory (the correct implementation)
-        backend_dir = current_dir / "backend"
-        if backend_dir.exists():
-            logger.info(f"🔍 Using backend directory: {backend_dir}")
-            sys.path.insert(0, str(backend_dir))
-            os.chdir(backend_dir)
-            
-            from app import app
-            logger.info("✅ Successfully imported FastAPI application from backend/app.py")
-            return app
-        else:
-            raise ImportError("Could not find backend directory")
+        # Change working directory to backend for proper imports
+        original_cwd = os.getcwd()
+        os.chdir(backend_dir)
+        
+        # Import the FastAPI app from backend
+        from app import app
+        
+        # Restore original working directory
+        os.chdir(original_cwd)
+        
+        logger.info("✅ Successfully imported FastAPI application from backend/app.py")
+        return app
         
     except Exception as e:
         logger.error(f"❌ Failed to import FastAPI application: {e}")
@@ -42,7 +57,7 @@ def create_app():
         logger.error(f"❌ Traceback: {traceback.format_exc()}")
         raise
 
-# Create the app instance
+# Create the app instance for Azure Web Apps
 app = create_app()
 
 # For Azure Web Apps compatibility

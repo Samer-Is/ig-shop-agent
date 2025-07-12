@@ -41,7 +41,7 @@ class DatabaseService:
                 min_size=1,
                 max_size=10,
                 command_timeout=60,
-                ssl='require' if settings.is_production else 'prefer'
+                ssl='require'  # Azure PostgreSQL requires SSL
             )
             
             # Test connection

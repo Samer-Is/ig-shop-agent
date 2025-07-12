@@ -93,8 +93,8 @@ user.instagram_access_token = access_token
 
 ### Environment Configuration
 ```python
-META_APP_ID = os.environ.get('META_APP_ID', '1879578119651644')
-META_APP_SECRET = os.environ.get('META_APP_SECRET', 'f79b3350f43751d6139e1b29a232cbf3')
+META_APP_ID = os.environ.get('META_APP_ID')
+META_APP_SECRET = os.environ.get('META_APP_SECRET')
 META_REDIRECT_URI = os.environ.get('META_REDIRECT_URI', 'https://igshop-api.azurewebsites.net/auth/instagram/callback')
 ```
 
