@@ -15,14 +15,16 @@ import httpx
 
 from database import get_database, DatabaseService
 from azure_openai_service import AzureOpenAIService
+from azure_speech_service import AzureSpeechService
 from config import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
-# Initialize AI service
+# Initialize services
 ai_service = AzureOpenAIService()
+speech_service = AzureSpeechService()
 
 # Meta Webhook verification token (should be in environment)
 WEBHOOK_VERIFY_TOKEN = os.getenv("WEBHOOK_VERIFY_TOKEN", "")
@@ -104,7 +106,7 @@ async def process_webhook_entry(entry: Dict[str, Any], db: DatabaseService):
         logger.error(f"❌ Error processing entry: {e}", exc_info=True)
 
 async def process_messaging_event(event: Dict[str, Any], page_id: str, db: DatabaseService):
-    """Process a messaging event and generate AI response"""
+    """Process a messaging event and generate AI response with voice message support"""
     try:
         logger.info(f"Processing messaging event: {json.dumps(event, indent=2)}")
         
@@ -118,17 +120,41 @@ async def process_messaging_event(event: Dict[str, Any], page_id: str, db: Datab
         recipient_id = event.get("recipient", {}).get("id")
         timestamp = event.get("timestamp")
         
-        # Skip if no sender ID or message text
+        # Skip if no sender ID
         if not sender_id:
             logger.warning("No sender ID in message event")
             return
-            
-        message_text = message.get("text", "")
+        
+        # Handle different message types
+        message_text = ""
+        is_voice_message = False
+        
+        # Check for text message
+        if "text" in message:
+            message_text = message["text"]
+            logger.info(f"Processing text message from {sender_id}: {message_text}")
+        
+        # Check for voice message (audio attachment)
+        elif "attachments" in message:
+            for attachment in message["attachments"]:
+                if attachment.get("type") == "audio":
+                    logger.info(f"Processing voice message from {sender_id}")
+                    is_voice_message = True
+                    
+                    # Transcribe voice message
+                    transcript = await speech_service.transcribe_instagram_audio(attachment)
+                    if transcript:
+                        message_text = transcript
+                        logger.info(f"Voice message transcribed: {message_text}")
+                    else:
+                        message_text = "[Voice message - transcription failed]"
+                        logger.warning("Voice message transcription failed")
+                    break
+        
+        # Skip if no processable message content
         if not message_text:
-            logger.info("No text in message, skipping")
+            logger.info("No processable message content, skipping")
             return
-            
-        logger.info(f"Processing message from {sender_id}: {message_text}")
         
         # Get merchant data by page_id
         merchant = await get_merchant_by_page_id(page_id, db)
@@ -156,7 +182,7 @@ async def process_messaging_event(event: Dict[str, Any], page_id: str, db: Datab
         
         # Get conversation history (last 20 messages as per consultant recommendations)
         conversation_history = await db.fetch_all(
-            "SELECT message, is_ai_response, created_at FROM conversations WHERE user_id = $1 AND customer = $2 ORDER BY created_at DESC LIMIT 20",
+            "SELECT message, is_ai_response, sentiment, intent, created_at FROM conversations WHERE user_id = $1 AND customer = $2 ORDER BY created_at DESC LIMIT 20",
             merchant["id"],
             sender_id
         )
@@ -166,28 +192,43 @@ async def process_messaging_event(event: Dict[str, Any], page_id: str, db: Datab
             message=message_text,
             catalog_items=catalog_items,
             conversation_history=conversation_history,
-            customer_context={"sender_id": sender_id, "page_id": page_id},
+            customer_context={"sender_id": sender_id, "page_id": page_id, "is_voice_message": is_voice_message},
             business_rules=business_rules,
             knowledge_base=knowledge_base
         )
         
         if ai_response:
-            # Save customer message to database
+            # Analyze sentiment and intent for the customer message
+            sentiment, intent, products_mentioned = await analyze_message_context(
+                message_text, catalog_items, conversation_history
+            )
+            
+            # Save customer message to database with analytics
             await db.execute_query(
-                "INSERT INTO conversations (id, user_id, customer, message, is_ai_response) VALUES (gen_random_uuid(), $1, $2, $3, $4)",
+                """INSERT INTO conversations 
+                   (id, user_id, customer, message, is_ai_response, sentiment, intent, products_mentioned) 
+                   VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)""",
                 merchant["id"],
                 sender_id,
-                message_text,
-                False
+                f"{'[Voice] ' if is_voice_message else ''}{message_text}",
+                False,
+                sentiment,
+                intent,
+                products_mentioned
             )
             
             # Save AI response to database
             await db.execute_query(
-                "INSERT INTO conversations (id, user_id, customer, message, is_ai_response) VALUES (gen_random_uuid(), $1, $2, $3, $4)",
+                """INSERT INTO conversations 
+                   (id, user_id, customer, message, is_ai_response, sentiment, intent, products_mentioned) 
+                   VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)""",
                 merchant["id"],
                 sender_id,
                 ai_response,
-                True
+                True,
+                "neutral",
+                "response",
+                []
             )
             
             # Send AI response back to Instagram
@@ -197,12 +238,49 @@ async def process_messaging_event(event: Dict[str, Any], page_id: str, db: Datab
                 access_token=merchant.get("instagram_access_token")
             )
             
-            logger.info(f"✅ Processed message and sent AI response to {sender_id}")
+            logger.info(f"✅ Processed {'voice ' if is_voice_message else ''}message and sent AI response to {sender_id}")
         else:
             logger.warning("Failed to generate AI response")
             
     except Exception as e:
         logger.error(f"❌ Error processing messaging event: {e}", exc_info=True)
+
+async def analyze_message_context(message_text: str, catalog_items: list, conversation_history: list) -> tuple:
+    """Analyze message for sentiment, intent, and product mentions"""
+    try:
+        # Simple sentiment analysis
+        sentiment = "neutral"
+        if any(word in message_text.lower() for word in ["great", "excellent", "love", "amazing", "ممتاز", "رائع", "حلو"]):
+            sentiment = "positive"
+        elif any(word in message_text.lower() for word in ["bad", "terrible", "hate", "awful", "سيء", "فظيع", "مش حلو"]):
+            sentiment = "negative"
+        elif any(word in message_text.lower() for word in ["angry", "frustrated", "problem", "زعلان", "مشكلة", "غاضب"]):
+            sentiment = "angry"
+        
+        # Intent classification
+        intent = "general_inquiry"
+        if any(word in message_text.lower() for word in ["buy", "order", "purchase", "اشتري", "اطلب", "بدي"]):
+            intent = "order_placement"
+        elif any(word in message_text.lower() for word in ["price", "cost", "سعر", "كم", "بكم"]):
+            intent = "price_inquiry"
+        elif any(word in message_text.lower() for word in ["available", "stock", "متوفر", "موجود", "في"]):
+            intent = "stock_check"
+        elif any(word in message_text.lower() for word in ["delivery", "shipping", "توصيل", "شحن"]):
+            intent = "delivery_inquiry"
+        elif sentiment in ["negative", "angry"]:
+            intent = "complaint"
+        
+        # Product mentions
+        products_mentioned = []
+        for item in catalog_items:
+            if item["name"].lower() in message_text.lower():
+                products_mentioned.append(item["name"])
+        
+        return sentiment, intent, products_mentioned
+        
+    except Exception as e:
+        logger.error(f"Error analyzing message context: {e}")
+        return "neutral", "general_inquiry", []
 
 async def get_merchant_by_page_id(page_id: str, db: DatabaseService) -> Optional[Dict[str, Any]]:
     """Get merchant data by Instagram page ID"""

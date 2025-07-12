@@ -248,6 +248,23 @@ class DatabaseService:
             except Exception as e:
                 logger.warning(f"Migration warning (likely already exists): {e}")
             
+            # Add sentiment and intent tracking columns for Phase 4 analytics
+            await self.execute_query("""
+                ALTER TABLE conversations 
+                ADD COLUMN IF NOT EXISTS sentiment VARCHAR(20),
+                ADD COLUMN IF NOT EXISTS intent VARCHAR(50),
+                ADD COLUMN IF NOT EXISTS products_mentioned TEXT[]
+            """)
+            logger.info("Migration: Added sentiment, intent, and products_mentioned columns")
+            
+            # Create indexes for better query performance
+            await self.execute_query("""
+                CREATE INDEX IF NOT EXISTS idx_conversations_sentiment ON conversations(sentiment);
+                CREATE INDEX IF NOT EXISTS idx_conversations_intent ON conversations(intent);
+                CREATE INDEX IF NOT EXISTS idx_conversations_user_customer ON conversations(user_id, customer);
+            """)
+            logger.info("Migration: Added indexes for conversation analytics")
+            
             logger.info("Database schema initialized successfully")
             return True
             
