@@ -10,8 +10,9 @@ from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables from .env file (look in parent directory)
-# Override existing environment variables with .env file values
-load_dotenv(dotenv_path="../.env", override=True)
+# Only load .env file if not in production to avoid overriding Azure environment variables
+if os.getenv("ENVIRONMENT", "development").lower() != "production":
+    load_dotenv(dotenv_path="../.env", override=True)
 
 class Settings:
     """Simple settings class using environment variables"""
