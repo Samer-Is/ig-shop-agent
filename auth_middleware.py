@@ -39,11 +39,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request.state.user_id = user_info.get('id') if user_info else None
         request.state.is_authenticated = user_info is not None
         
-        # Set user context for enterprise database RLS
+        # Set user context for enterprise database RLS (production only)
         if user_info and user_info.get('id'):
             try:
-                enterprise_db = await get_enterprise_database()
-                await enterprise_db.set_user_context(user_info['id'])
+                from config import settings
+                if settings.ENVIRONMENT == "production":
+                    enterprise_db = await get_enterprise_database()
+                    await enterprise_db.set_user_context(user_info['id'])
             except Exception as e:
                 logger.warning(f"Failed to set enterprise DB user context: {e}")
         
