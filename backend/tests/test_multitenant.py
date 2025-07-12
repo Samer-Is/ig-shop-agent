@@ -1,21 +1,19 @@
+"""
+Multi-Tenant Isolation Tests for IG-Shop-Agent
+Verifies that all database queries and AI responses are properly isolated by user_id
+"""
+
 import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch
-from fastapi.testclient import TestClient
-from fastapi import HTTPException
-import sys
-import os
-
-# Add the parent directory to the path so we can import modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from routers.conversations import router as conversations_router
-from routers.webhook import get_merchant_by_page_id, process_messaging_event
+from unittest.mock import Mock, AsyncMock
 from azure_openai_service import AzureOpenAIService
 from database import DatabaseService
 
+# Import the functions we want to test
+from routers.webhook import get_merchant_by_page_id, process_messaging_event
+
 class TestMultiTenantIsolation:
-    """Test multi-tenant isolation in the system"""
+    """Test suite for multi-tenant isolation functionality"""
     
     def test_ai_service_system_prompt_includes_context(self):
         """Test that AI service system prompt includes proper context"""
@@ -109,8 +107,8 @@ class TestMultiTenantIsolation:
         print("✅ get_merchant_by_page_id properly isolates merchants by page ID")
     
     @pytest.mark.asyncio
-    async def test_get_merchant_by_page_id_no_match(self):
-        """Test behavior when no merchant matches page_id"""
+    async def test_get_merchant_by_page_id_no_match(self):  
+        """Test behavior when no merchant matches page_id - should fail secure"""
         
         # Mock database service
         mock_db = Mock(spec=DatabaseService)
@@ -127,9 +125,8 @@ class TestMultiTenantIsolation:
         # Test with non-existent page_id
         result = await get_merchant_by_page_id('nonexistent_page', mock_db)
         
-        # Should return fallback user
-        assert result is not None
-        assert result['id'] == 'fallback_user'
+        # Should return None (fail secure) - no fallback for security
+        assert result is None
         
         print("✅ get_merchant_by_page_id handles missing page_id with fallback")
     

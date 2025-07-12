@@ -10,14 +10,17 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.base import BaseHTTPMiddleware
 import jwt
 from database import get_database
+from database_service_rls import get_enterprise_database
 
 logger = logging.getLogger(__name__)
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """Middleware to handle authentication and user context"""
     
-    def __init__(self, app, secret_key: str = "your-secret-key"):
+    def __init__(self, app, secret_key: str = None):
         super().__init__(app)
+        if not secret_key:
+            raise ValueError("SECRET_KEY is required for authentication middleware")
         self.secret_key = secret_key
         self.security = HTTPBearer(auto_error=False)
     
@@ -35,6 +38,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request.state.user = user_info
         request.state.user_id = user_info.get('id') if user_info else None
         request.state.is_authenticated = user_info is not None
+        
+        # Set user context for enterprise database RLS
+        if user_info and user_info.get('id'):
+            try:
+                enterprise_db = await get_enterprise_database()
+                await enterprise_db.set_user_context(user_info['id'])
+            except Exception as e:
+                logger.warning(f"Failed to set enterprise DB user context: {e}")
         
         # Continue with request
         response = await call_next(request)
@@ -84,18 +95,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Method 3: Check for session in localStorage (for frontend compatibility)
         # This would be handled by the frontend sending proper tokens
         
-        # Method 4: Default to first authenticated user (for development)
-        try:
-            db = await get_database()
-            user_info = await db.fetch_one(
-                "SELECT id, instagram_username, instagram_page_name, instagram_connected FROM users WHERE instagram_connected = true LIMIT 1"
-            )
-            if user_info:
-                logger.debug(f"Using default authenticated user: {user_info.get('id')}")
-                return dict(user_info)
-        except Exception as e:
-            logger.warning(f"Failed to get default user: {e}")
-        
+        # No fallback - fail secure
+        logger.warning("Failed to authenticate user - no fallback allowed for security")
         return None
     
     async def _verify_jwt_token(self, token: str) -> Optional[Dict[str, Any]]:

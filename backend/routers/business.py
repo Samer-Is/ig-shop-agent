@@ -3,10 +3,11 @@ Business Rules and Configuration Management
 Handles merchant-specific business information and AI settings
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
 from typing import Optional
 from database import get_database, DatabaseService
+from auth_middleware import get_current_user_id, require_auth
 import logging
 
 logger = logging.getLogger(__name__)
@@ -44,12 +45,17 @@ class BusinessRulesResponse(BaseModel):
     response_tone: str
 
 @router.get("/rules", response_model=BusinessRulesResponse)
-async def get_business_rules(db: DatabaseService = Depends(get_database)):
+async def get_business_rules(request: Request, db: DatabaseService = Depends(get_database)):
     """Get current business rules and configuration"""
     try:
+        # Get current user ID
+        user_id = get_current_user_id(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
         rules = await db.fetch_one(
             "SELECT * FROM business_rules WHERE user_id = $1",
-            "default-user"  # TODO: Get from auth context
+            user_id
         )
         
         if not rules:
@@ -59,14 +65,14 @@ async def get_business_rules(db: DatabaseService = Depends(get_database)):
                 INSERT INTO business_rules (id, user_id, language_preference, response_tone) 
                 VALUES (gen_random_uuid(), $1, $2, $3)
                 """,
-                "default-user",
+                user_id,
                 "en,ar",
                 "professional"
             )
             
             rules = await db.fetch_one(
                 "SELECT * FROM business_rules WHERE user_id = $1",
-                "default-user"
+                user_id
             )
         
         return BusinessRulesResponse(**rules)
@@ -78,14 +84,20 @@ async def get_business_rules(db: DatabaseService = Depends(get_database)):
 @router.put("/rules", response_model=BusinessRulesResponse)
 async def update_business_rules(
     rules_update: BusinessRulesUpdate,
+    request: Request,
     db: DatabaseService = Depends(get_database)
 ):
     """Update business rules and configuration"""
     try:
+        # Get current user ID
+        user_id = get_current_user_id(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
         # Get current rules
         current_rules = await db.fetch_one(
             "SELECT * FROM business_rules WHERE user_id = $1",
-            "default-user"  # TODO: Get from auth context
+            user_id
         )
         
         if not current_rules:
@@ -101,7 +113,7 @@ async def update_business_rules(
                     gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
                 )
                 """,
-                "default-user",
+                user_id,
                 rules_update.business_name,
                 rules_update.business_type,
                 rules_update.working_hours,
@@ -128,14 +140,14 @@ async def update_business_rules(
                     param_count += 1
             
             if update_fields:
-                update_values.append("default-user")  # user_id for WHERE clause
+                update_values.append(user_id)  # user_id for WHERE clause
                 query = f"UPDATE business_rules SET {', '.join(update_fields)}, updated_at = NOW() WHERE user_id = ${param_count + 1}"
                 await db.execute_query(query, *update_values)
         
         # Return updated rules
         updated_rules = await db.fetch_one(
             "SELECT * FROM business_rules WHERE user_id = $1",
-            "default-user"
+            user_id
         )
         
         return BusinessRulesResponse(**updated_rules)
@@ -145,12 +157,17 @@ async def update_business_rules(
         raise HTTPException(status_code=500, detail="Failed to update business rules")
 
 @router.post("/rules/reset")
-async def reset_business_rules(db: DatabaseService = Depends(get_database)):
+async def reset_business_rules(request: Request, db: DatabaseService = Depends(get_database)):
     """Reset business rules to defaults"""
     try:
+        # Get current user ID
+        user_id = get_current_user_id(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
         await db.execute_query(
             "DELETE FROM business_rules WHERE user_id = $1",
-            "default-user"  # TODO: Get from auth context
+            user_id
         )
         
         await db.execute_query(
@@ -158,7 +175,7 @@ async def reset_business_rules(db: DatabaseService = Depends(get_database)):
             INSERT INTO business_rules (id, user_id, language_preference, response_tone) 
             VALUES (gen_random_uuid(), $1, $2, $3)
             """,
-            "default-user",
+            user_id,
             "en,ar",
             "professional"
         )

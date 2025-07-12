@@ -80,6 +80,14 @@ class Settings:
         self.RATE_LIMIT_REQUESTS: int = int(os.getenv("RATE_LIMIT_REQUESTS", "1000"))
         self.RATE_LIMIT_WINDOW: int = int(os.getenv("RATE_LIMIT_WINDOW", "3600"))  # 1 hour
         
+        # Enterprise Security Configuration
+        self.ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "default-encryption-key-change-in-production")
+        self.SECRET_KEY: str = os.getenv("SECRET_KEY", "ig-shop-secret-key-2024")
+        self.ENABLE_RLS: bool = os.getenv("ENABLE_RLS", "true").lower() == "true"
+        self.ENABLE_AUDIT_LOGGING: bool = os.getenv("ENABLE_AUDIT_LOGGING", "true").lower() == "true"
+        self.DATA_RETENTION_DAYS: int = int(os.getenv("DATA_RETENTION_DAYS", "30"))
+        self.AUDIT_RETENTION_YEARS: int = int(os.getenv("AUDIT_RETENTION_YEARS", "7"))
+        
         # CORS Configuration
         self.CORS_ORIGINS: list = [
             "https://red-island-0b863450f.2.azurestaticapps.net",

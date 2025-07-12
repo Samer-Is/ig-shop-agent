@@ -72,8 +72,9 @@ class TenantMiddleware(BaseHTTPMiddleware):
                     logger.debug(f"Tenant identified from subdomain: {tenant_handle}")
                     return tenant_handle
         
-        # Default tenant for development
-        return "default-user"
+        # No fallback - fail secure
+        logger.warning("Failed to identify tenant - no fallback allowed for security")
+        return None
 
 def get_current_tenant_id(request: Request) -> Optional[str]:
     """Get current tenant ID from request"""

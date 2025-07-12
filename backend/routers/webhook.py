@@ -7,6 +7,7 @@ import logging
 import json
 import hmac
 import hashlib
+import os
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import PlainTextResponse
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 ai_service = AzureOpenAIService()
 
 # Meta Webhook verification token (should be in environment)
-WEBHOOK_VERIFY_TOKEN = "igshop_webhook_verify_2024"
+WEBHOOK_VERIFY_TOKEN = os.getenv("WEBHOOK_VERIFY_TOKEN", "")
 
 @router.get("/instagram")
 async def verify_webhook(
@@ -234,10 +235,9 @@ async def get_merchant_by_page_id(page_id: str, db: DatabaseService) -> Optional
         logger.warning(f"No merchant found for page_id: {page_id}")
         logger.warning(f"Available connected users: {all_connected}")
         
-        # As a fallback, return the first connected user but log this as an issue
-        if all_connected:
-            logger.warning(f"Using fallback: first connected user {all_connected[0]['id']} for page_id {page_id}")
-            return all_connected[0]
+        # No fallback - fail secure
+        logger.error(f"No merchant found for page_id {page_id} - this is a security issue")
+        return None
         
         return None
         

@@ -16,7 +16,9 @@ import sys
 # Import configuration and database
 from config import settings
 from database import get_database, init_database
+from database_service_rls import get_enterprise_database, init_enterprise_database
 from auth_middleware import AuthMiddleware
+from rate_limiting_middleware import EnterpriseRateLimitingMiddleware
 
 # Import routers
 try:
@@ -52,6 +54,14 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Database initialization failed: {e}")
         # Don't fail startup - let the app run and handle DB errors gracefully
     
+    # Initialize enterprise database with RLS
+    try:
+        await init_enterprise_database()
+        logger.info("✅ Enterprise database with RLS initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Enterprise database initialization failed: {e}")
+        # Don't fail startup - continue with basic database
+    
     yield
     
     # Shutdown
@@ -73,6 +83,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add enterprise rate limiting middleware (first - before auth)
+app.add_middleware(EnterpriseRateLimitingMiddleware)
 
 # Add authentication middleware
 app.add_middleware(AuthMiddleware, secret_key=settings.SECRET_KEY if hasattr(settings, 'SECRET_KEY') else "ig-shop-secret-key-2024")

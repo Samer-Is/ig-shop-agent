@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request
 from typing import List
 from pydantic import BaseModel
 from database import get_database, DatabaseService
+from auth_middleware import get_current_user_id, require_auth
 import logging
 import os
 import uuid
@@ -21,11 +22,17 @@ async def get_db() -> DatabaseService:
     return await get_database()
 
 @router.get("/", response_model=List[KBDocumentResponse])
-async def get_knowledge_base(db: DatabaseService = Depends(get_db)):
+async def get_knowledge_base(request: Request, db: DatabaseService = Depends(get_db)):
     """Get all knowledge base documents"""
     try:
+        # Get current user ID
+        user_id = get_current_user_id(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
         documents = await db.fetch_all(
-            "SELECT id, title, content as file_uri FROM kb_documents ORDER BY created_at DESC"
+            "SELECT id, title, content as file_uri FROM kb_documents WHERE user_id = $1 ORDER BY created_at DESC",
+            user_id
         )
         return [KBDocumentResponse(
             id=doc["id"],
@@ -39,11 +46,16 @@ async def get_knowledge_base(db: DatabaseService = Depends(get_db)):
 
 @router.post("/upload")
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     db: DatabaseService = Depends(get_db)
 ):
     """Upload a document to the knowledge base"""
     try:
+        # Get current user ID
+        user_id = get_current_user_id(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
         # Validate file type
         allowed_types = ["application/pdf", "text/plain", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
         if file.content_type not in allowed_types:
@@ -72,7 +84,7 @@ async def upload_document(
         await db.execute_query(
             "INSERT INTO kb_documents (id, user_id, title, content) VALUES ($1, $2, $3, $4)",
             doc_id,
-            "default-user",  # TODO: Get from auth context
+            user_id,
             file.filename,
             content
         )
@@ -89,16 +101,21 @@ async def upload_document(
         raise HTTPException(status_code=500, detail="Failed to upload document")
 
 @router.delete("/{doc_id}")
-async def delete_document(doc_id: str, db: DatabaseService = Depends(get_db)):
+async def delete_document(doc_id: str, request: Request, db: DatabaseService = Depends(get_db)):
     """Delete a knowledge base document"""
     try:
-        # Check if document exists
-        document = await db.fetch_one("SELECT id FROM kb_documents WHERE id = $1", doc_id)
+        # Get current user ID
+        user_id = get_current_user_id(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
+        # Check if document exists and belongs to user
+        document = await db.fetch_one("SELECT id FROM kb_documents WHERE id = $1 AND user_id = $2", doc_id, user_id)
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         
         # Delete document
-        await db.execute_query("DELETE FROM kb_documents WHERE id = $1", doc_id)
+        await db.execute_query("DELETE FROM kb_documents WHERE id = $1 AND user_id = $2", doc_id, user_id)
         
         return {"message": "Document deleted successfully"}
         
