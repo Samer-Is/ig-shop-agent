@@ -2,7 +2,7 @@
 """
 IG-Shop-Agent - Main Entry Point for Azure Web Apps
 This is the main entry point that Azure Web Apps will execute.
-Imports the FastAPI application from the backend directory.
+Imports the FastAPI application from the root directory.
 """
 
 import os
@@ -17,38 +17,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def setup_backend_path():
-    """Setup the Python path to include the backend directory"""
+def setup_paths():
+    """Setup the Python path to include necessary directories"""
     current_dir = Path(__file__).parent
+    
+    # Add current directory to Python path for imports
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+    
+    # Add backend directory to Python path for middleware imports
     backend_dir = current_dir / "backend"
-    
-    if not backend_dir.exists():
-        raise ImportError(f"Backend directory not found at {backend_dir}")
-    
-    # Add backend directory to Python path
-    if str(backend_dir) not in sys.path:
+    if backend_dir.exists() and str(backend_dir) not in sys.path:
         sys.path.insert(0, str(backend_dir))
+        logger.info(f"✅ Added backend directory to Python path: {backend_dir}")
     
-    logger.info(f"✅ Added backend directory to Python path: {backend_dir}")
-    return backend_dir
+    logger.info(f"✅ Added root directory to Python path: {current_dir}")
+    return current_dir
 
 def create_app():
-    """Create and configure the FastAPI application from backend"""
+    """Create and configure the FastAPI application"""
     try:
-        # Setup backend path
-        backend_dir = setup_backend_path()
+        # Setup paths
+        setup_paths()
         
-        # Change working directory to backend for proper imports
-        original_cwd = os.getcwd()
-        os.chdir(backend_dir)
-        
-        # Import the FastAPI app from backend
+        # Import the FastAPI app from root directory
         from app import app
         
-        # Restore original working directory
-        os.chdir(original_cwd)
-        
-        logger.info("✅ Successfully imported FastAPI application from backend/app.py")
+        logger.info("✅ Successfully imported FastAPI application from app.py")
         return app
         
     except Exception as e:
