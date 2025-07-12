@@ -1,0 +1,17 @@
+---
+description: Continuous-integration & shell-script safety
+alwaysApply: false
+globs: ["**/.github/workflows/**", "**/.gitlab-ci.yml", "scripts/**"]
+---
+
+# Shell scripts
+- Must start with `set -euo pipefail`
+- Use `shellcheck` in CI (`-x` flag for sourced files)
+
+# Workflow guidelines
+- Require `npm ci` / `pip install -r requirements.txt --no-cache-dir`
+- Never publish to production branches without green tests
+
+# Verification checklist
+1. `shellcheck` passes on every script
+2. CI config does **not** reference personal access tokens directly

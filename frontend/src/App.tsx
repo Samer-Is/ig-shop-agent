@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import MinimalDashboard from './components/MinimalDashboard';
-import { apiService } from './services/api';
+import { productionApi } from './utils/api';
 
 interface User {
   id: string;
@@ -30,13 +30,13 @@ const App: React.FC = () => {
   const handleInstagramConnect = async () => {
     try {
       setIsConnecting(true);
-      const response = await apiService.getInstagramAuthUrl();
+      const response = await productionApi.getInstagramAuthUrl();
       
-      if (response.data?.auth_url) {
+      if (response.auth_url) {
         // Redirect to Instagram OAuth
-        window.location.href = response.data.auth_url;
+        window.location.href = response.auth_url;
       } else {
-        throw new Error(response.error || 'Failed to get Instagram auth URL');
+        throw new Error('Failed to get Instagram auth URL');
       }
     } catch (error) {
       console.error('Instagram connect error:', error);
@@ -65,13 +65,13 @@ const App: React.FC = () => {
   const handleInstagramCallback = async (code: string, state: string) => {
     try {
       setIsConnecting(true);
-      const response = await apiService.handleInstagramCallback(code, state);
+      const response = await productionApi.handleInstagramCallback({ code, state });
       
-      if (response.data?.success && response.data?.user) {
+      if (response.success && response.user) {
         const userData = {
-          id: response.data.user.id,
-          instagram_handle: response.data.instagram_handle || response.data.user.instagram_handle,
-          instagram_connected: response.data.user.instagram_connected
+          id: response.user.id,
+          instagram_handle: response.instagram_handle || response.user.instagram_handle,
+          instagram_connected: response.user.instagram_connected
         };
         
         setUser(userData);
@@ -82,7 +82,7 @@ const App: React.FC = () => {
         
         alert('Instagram connected successfully!');
       } else {
-        throw new Error(response.error || 'Failed to connect Instagram');
+        throw new Error(response.message || 'Failed to connect Instagram');
       }
     } catch (error) {
       console.error('Instagram callback error:', error);
