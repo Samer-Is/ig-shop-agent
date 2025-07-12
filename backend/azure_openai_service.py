@@ -18,10 +18,10 @@ class AzureOpenAIService:
         try:
             # Initialize OpenAI client
             self.client = OpenAI(
-                api_key=settings.openai_api_key,
-                base_url=settings.openai_base_url if hasattr(settings, 'openai_base_url') else None
+                api_key=settings.OPENAI_API_KEY,
+                base_url=getattr(settings, 'OPENAI_BASE_URL', None)
             )
-            self.model = settings.openai_model or "gpt-4o"
+            self.model = getattr(settings, 'OPENAI_MODEL', 'gpt-4o')
             logger.info(f"AI service initialized successfully using model: {self.model}")
         except Exception as e:
             logger.error(f"Failed to initialize AI service: {e}")

@@ -50,6 +50,7 @@ class Settings:
         
         # OpenAI Configuration
         self.OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+        self.OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o")
         self.OPENAI_API_VERSION: str = "2023-05-15"
         self.OPENAI_DEPLOYMENT_NAME: str = "gpt-4"
         self.OPENAI_EMBEDDING_DEPLOYMENT: str = "text-embedding-ada-002"
