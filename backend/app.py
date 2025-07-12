@@ -16,6 +16,7 @@ import sys
 # Import configuration and database
 from config import settings
 from database import get_database, init_database
+from auth_middleware import AuthMiddleware
 
 # Import routers
 try:
@@ -73,6 +74,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add authentication middleware
+app.add_middleware(AuthMiddleware, secret_key=settings.SECRET_KEY if hasattr(settings, 'SECRET_KEY') else "ig-shop-secret-key-2024")
+
 # Remove duplicate router inclusions and add direct backend-api routes
 if routers_imported:
     try:
@@ -95,13 +99,25 @@ else:
 
 # Direct backend-api routes to avoid Azure SWA conflicts
 @app.get("/backend-api/analytics")
-async def backend_analytics():
+async def backend_analytics(request: Request):
     """Backend API analytics endpoint"""
     try:
         from routers.analytics import get_analytics
         from database import get_database
+        from auth_middleware import get_current_user_id
+        
+        user_id = get_current_user_id(request)
+        if not user_id:
+            # Return empty analytics for unauthenticated users
+            return {
+                "orders": {"total": 0, "revenue": 0.0, "average_value": 0.0, "pending": 0, "completed": 0},
+                "catalog": {"total_products": 0, "active_products": 0, "out_of_stock": 0},
+                "conversations": {"total_messages": 0, "ai_responses": 0, "customer_messages": 0},
+                "recent_orders": []
+            }
+        
         db = await get_database()
-        return await get_analytics(db)
+        return await get_analytics(request, db)
     except Exception as e:
         logger.error(f"Backend analytics error: {e}")
         return {
@@ -112,16 +128,33 @@ async def backend_analytics():
         }
 
 @app.get("/backend-api/catalog")
-async def backend_catalog():
+async def backend_catalog(request: Request):
     """Backend API catalog endpoint"""
     try:
         from routers.catalog import get_catalog
         from database import get_database
         db = await get_database()
-        return await get_catalog(db)
+        return await get_catalog(request, db)
     except Exception as e:
         logger.error(f"Backend catalog error: {e}")
         return []
+
+@app.post("/backend-api/catalog")
+async def backend_create_catalog_item(request: Request):
+    """Backend API create catalog item endpoint"""
+    try:
+        from routers.catalog import create_catalog_item, CatalogItemCreate
+        from database import get_database
+        
+        # Parse request body
+        data = await request.json()
+        item = CatalogItemCreate(**data)
+        
+        db = await get_database()
+        return await create_catalog_item(item, request, db)
+    except Exception as e:
+        logger.error(f"Backend catalog creation error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create catalog item")
 
 @app.get("/backend-api/orders")
 async def backend_orders():
@@ -171,6 +204,29 @@ async def backend_business_rules():
             "language_preference": "en,ar",
             "response_tone": "professional"
         }
+
+@app.get("/backend-api/user/profile")
+async def get_user_profile(request: Request):
+    """Get current user profile information"""
+    try:
+        from auth_middleware import get_current_user
+        user = get_current_user(request)
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
+        return {
+            "id": user.get("id"),
+            "instagram_username": user.get("instagram_username"),
+            "instagram_page_name": user.get("instagram_page_name"),
+            "instagram_connected": user.get("instagram_connected", False),
+            "created_at": user.get("created_at")
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting user profile: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get user profile")
 
 @app.get("/backend-api/debug/config")
 async def debug_config():

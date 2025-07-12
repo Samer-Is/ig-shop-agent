@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Optional
 from pydantic import BaseModel
 from database import get_database, DatabaseService
 from azure_openai_service import get_openai_client
+from auth_middleware import get_current_user_id, require_auth
 import logging
 import time
 import uuid
@@ -45,11 +46,17 @@ async def get_db() -> DatabaseService:
     return await get_database()
 
 @router.get("/", response_model=List[CatalogItemResponse])
-async def get_catalog(db: DatabaseService = Depends(get_db)):
-    """Get all catalog items"""
+async def get_catalog(request: Request, db: DatabaseService = Depends(get_db)):
+    """Get all catalog items for the authenticated user"""
     try:
+        # Get current user ID
+        user_id = get_current_user_id(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
         items = await db.fetch_all(
-            "SELECT id, sku, name, description, price_jod, category, media_url as image_url, stock_quantity, created_at FROM catalog_items ORDER BY created_at DESC"
+            "SELECT id, sku, name, description, price_jod, category, media_url as image_url, stock_quantity, created_at FROM catalog_items WHERE user_id = $1 ORDER BY created_at DESC",
+            user_id
         )
         return [CatalogItemResponse(
             id=item["id"],
@@ -69,10 +76,16 @@ async def get_catalog(db: DatabaseService = Depends(get_db)):
 @router.post("/")
 async def create_catalog_item(
     item: CatalogItemCreate,
+    request: Request,
     db: DatabaseService = Depends(get_db)
 ):
-    """Create a new catalog item"""
+    """Create a new catalog item for the authenticated user"""
     try:
+        # Get current user ID
+        user_id = get_current_user_id(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
         # Generate SKU and ID
         sku = f"SKU{int(time.time())}"
         item_id = str(uuid.uuid4())
@@ -84,7 +97,7 @@ async def create_catalog_item(
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             """,
             item_id,
-            "default-user",  # TODO: Get from auth context
+            user_id,  # Use authenticated user ID
             sku,
             item.name,
             item.description,
