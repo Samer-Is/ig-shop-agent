@@ -16,10 +16,21 @@ import sys
 # Import configuration and database
 from config import settings
 from database import get_database, init_database
+from database_service_rls import get_enterprise_database, init_enterprise_database
+from auth_middleware import AuthMiddleware
+from rate_limiting_middleware import EnterpriseRateLimitingMiddleware
 
-# Import routers
+# Logging configuration
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Import routers with error handling
 try:
-    from routers import auth, conversations, orders, catalog, kb, webhook, analytics
+    from routers import auth, conversations, orders, catalog, kb, webhook, analytics, business
     routers_imported = True
     import_error = None
 except Exception as e:
@@ -27,12 +38,7 @@ except Exception as e:
     import_error = str(e)
     logger.error(f"Failed to import routers: {e}")
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+
 
 # Security
 security = HTTPBearer()
@@ -50,6 +56,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
         # Don't fail startup - let the app run and handle DB errors gracefully
+    
+    # Initialize enterprise database with RLS (disabled in development)
+    if settings.ENVIRONMENT == "production":
+        try:
+            await init_enterprise_database()
+            logger.info("✅ Enterprise database with RLS initialized successfully")
+        except Exception as e:
+            logger.error(f"❌ Enterprise database initialization failed: {e}")
+            # Don't fail startup - continue with basic database
+    else:
+        logger.info("ℹ️ Enterprise database with RLS disabled in development mode")
     
     yield
     
@@ -73,6 +90,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add enterprise rate limiting middleware (first - before auth) - disabled in development
+if settings.ENVIRONMENT == "production":
+    app.add_middleware(EnterpriseRateLimitingMiddleware)
+    logger.info("✅ Enterprise rate limiting middleware enabled")
+else:
+    logger.info("ℹ️ Enterprise rate limiting middleware disabled in development mode")
+
+# Add authentication middleware - disabled in development for easier testing
+if settings.ENVIRONMENT == "production":
+    app.add_middleware(AuthMiddleware, secret_key=settings.SECRET_KEY if hasattr(settings, 'SECRET_KEY') else "ig-shop-secret-key-2024")
+    logger.info("✅ Authentication middleware enabled")
+else:
+    logger.info("ℹ️ Authentication middleware disabled in development mode")
+
 # Remove duplicate router inclusions and add direct backend-api routes
 if routers_imported:
     try:
@@ -83,6 +114,7 @@ if routers_imported:
         app.include_router(orders.router, prefix="/api/orders")
         app.include_router(catalog.router, prefix="/api/catalog")
         app.include_router(kb.router, prefix="/api/kb")
+        app.include_router(business.router, prefix="/api")
         app.include_router(webhook.router)
         logger.info("✅ Webhook router included successfully")
         
@@ -94,13 +126,25 @@ else:
 
 # Direct backend-api routes to avoid Azure SWA conflicts
 @app.get("/backend-api/analytics")
-async def backend_analytics():
+async def backend_analytics(request: Request):
     """Backend API analytics endpoint"""
     try:
         from routers.analytics import get_analytics
         from database import get_database
+        from auth_middleware import get_current_user_id
+        
+        user_id = get_current_user_id(request)
+        if not user_id:
+            # Return empty analytics for unauthenticated users
+            return {
+                "orders": {"total": 0, "revenue": 0.0, "average_value": 0.0, "pending": 0, "completed": 0},
+                "catalog": {"total_products": 0, "active_products": 0, "out_of_stock": 0},
+                "conversations": {"total_messages": 0, "ai_responses": 0, "customer_messages": 0},
+                "recent_orders": []
+            }
+        
         db = await get_database()
-        return await get_analytics(db)
+        return await get_analytics(request, db)
     except Exception as e:
         logger.error(f"Backend analytics error: {e}")
         return {
@@ -111,16 +155,33 @@ async def backend_analytics():
         }
 
 @app.get("/backend-api/catalog")
-async def backend_catalog():
+async def backend_catalog(request: Request):
     """Backend API catalog endpoint"""
     try:
         from routers.catalog import get_catalog
         from database import get_database
         db = await get_database()
-        return await get_catalog(db)
+        return await get_catalog(request, db)
     except Exception as e:
         logger.error(f"Backend catalog error: {e}")
         return []
+
+@app.post("/backend-api/catalog")
+async def backend_create_catalog_item(request: Request):
+    """Backend API create catalog item endpoint"""
+    try:
+        from routers.catalog import create_catalog_item, CatalogItemCreate
+        from database import get_database
+        
+        # Parse request body
+        data = await request.json()
+        item = CatalogItemCreate(**data)
+        
+        db = await get_database()
+        return await create_catalog_item(item, request, db)
+    except Exception as e:
+        logger.error(f"Backend catalog creation error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create catalog item")
 
 @app.get("/backend-api/orders")
 async def backend_orders():
@@ -145,6 +206,199 @@ async def backend_conversations():
     except Exception as e:
         logger.error(f"Backend conversations error: {e}")
         return []
+
+@app.get("/backend-api/business/rules")
+async def backend_business_rules():
+    """Backend API business rules endpoint"""
+    try:
+        from routers.business import get_business_rules
+        from database import get_database
+        db = await get_database()
+        return await get_business_rules(db)
+    except Exception as e:
+        logger.error(f"Backend business rules error: {e}")
+        return {
+            "business_name": None,
+            "business_type": None,
+            "working_hours": None,
+            "delivery_info": None,
+            "payment_methods": None,
+            "return_policy": None,
+            "terms_conditions": None,
+            "contact_info": None,
+            "custom_prompt": None,
+            "ai_instructions": None,
+            "language_preference": "en,ar",
+            "response_tone": "professional"
+        }
+
+@app.get("/backend-api/user/profile")
+async def get_user_profile(request: Request):
+    """Get current user profile information"""
+    try:
+        from auth_middleware import get_current_user
+        user = get_current_user(request)
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
+        return {
+            "id": user.get("id"),
+            "instagram_username": user.get("instagram_username"),
+            "instagram_page_name": user.get("instagram_page_name"),
+            "instagram_connected": user.get("instagram_connected", False),
+            "created_at": user.get("created_at")
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting user profile: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get user profile")
+
+@app.get("/backend-api/debug/config")
+async def debug_config():
+    """Debug endpoint to check configuration - REMOVE IN PRODUCTION"""
+    try:
+        return {
+            "openai_api_key_set": bool(settings.OPENAI_API_KEY),
+            "openai_api_key_length": len(settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else 0,
+            "azure_openai_endpoint_set": bool(settings.AZURE_OPENAI_ENDPOINT),
+            "azure_openai_api_key_set": bool(settings.AZURE_OPENAI_API_KEY),
+            "azure_openai_deployment": settings.AZURE_OPENAI_DEPLOYMENT_NAME,
+            "use_azure_openai": settings.use_azure_openai,
+            "meta_app_id_set": bool(settings.META_APP_ID),
+            "database_url_set": bool(settings.DATABASE_URL),
+            "environment": settings.ENVIRONMENT,
+            "cors_origins": settings.CORS_ORIGINS[:2]  # Show only first 2 for brevity
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/backend-api/ai/test-detailed")
+async def backend_ai_test_detailed(request: Request):
+    """Detailed AI test endpoint with error information"""
+    try:
+        from azure_openai_service import AzureOpenAIService
+        
+        # Parse request data
+        data = await request.json()
+        message = data.get('message', 'Hello')
+        
+        logger.info(f"Testing AI with message: {message}")
+        
+        # Test Azure OpenAI or regular OpenAI based on configuration
+        try:
+            if settings.use_azure_openai:
+                logger.info("Testing with Azure OpenAI")
+                from openai import AzureOpenAI
+                client = AzureOpenAI(
+                    azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                    api_key=settings.AZURE_OPENAI_API_KEY,
+                    api_version=settings.AZURE_OPENAI_API_VERSION
+                )
+                model = settings.AZURE_OPENAI_DEPLOYMENT_NAME
+                service_type = "Azure OpenAI"
+            else:
+                logger.info("Testing with regular OpenAI")
+                from openai import OpenAI
+                client = OpenAI(api_key=settings.OPENAI_API_KEY)
+                model = "gpt-4o"
+                service_type = "OpenAI"
+            
+            logger.info(f"Client created successfully for {service_type}")
+            
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": message}
+                ],
+                max_tokens=50,
+                temperature=0.7
+            )
+            
+            ai_response = response.choices[0].message.content.strip()
+            logger.info(f"{service_type} response received: {ai_response[:50]}...")
+            
+            return {
+                "success": True,
+                "response": ai_response,
+                "service_type": service_type,
+                "model_used": model,
+                "use_azure_openai": settings.use_azure_openai
+            }
+            
+        except Exception as openai_error:
+            logger.error(f"AI API error: {openai_error}")
+            return {
+                "success": False,
+                "error": str(openai_error),
+                "error_type": type(openai_error).__name__,
+                "service_type": "Azure OpenAI" if settings.use_azure_openai else "OpenAI",
+                "use_azure_openai": settings.use_azure_openai,
+                "azure_endpoint_set": bool(settings.AZURE_OPENAI_ENDPOINT),
+                "azure_api_key_set": bool(settings.AZURE_OPENAI_API_KEY)
+            }
+        
+    except Exception as e:
+        logger.error(f"General error in AI test: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
+@app.post("/backend-api/ai/test")
+async def backend_ai_test(request: Request):
+    """Backend API AI test endpoint"""
+    try:
+        from azure_openai_service import AzureOpenAIService
+        
+        # Parse request data
+        data = await request.json()
+        message = data.get('message', '')
+        business_rules = data.get('business_rules', {})
+        products = data.get('products', [])
+        knowledge_base = data.get('knowledge_base', [])
+        
+        if not message:
+            return {"error": "Message is required"}
+        
+        # Initialize AI service
+        ai_service = AzureOpenAIService()
+        
+        # Build enhanced context with knowledge base
+        enhanced_context = {
+            'products': products,
+            'business_rules': business_rules,
+            'knowledge_base': knowledge_base
+        }
+        
+        # Generate AI response with enhanced context
+        ai_response = await ai_service.generate_response(
+            message=message,
+            catalog_items=products,
+            conversation_history=[],
+            business_rules=business_rules,
+            knowledge_base=knowledge_base
+        )
+        
+        return {
+            "response": ai_response,
+            "context": {
+                "products_count": len(products),
+                "knowledge_items_count": len(knowledge_base),
+                "business_rules_provided": bool(business_rules),
+                "message_length": len(message)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Backend AI test error: {e}")
+        return {
+            "error": str(e),
+            "message": "AI test failed - check logs for details"
+        }
 
 # Instagram Webhook endpoints are now handled by the webhook router
 

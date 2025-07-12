@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Dict, Any, List
 from pydantic import BaseModel
 from database import get_database, DatabaseService
+from auth_middleware import get_current_user_id, require_auth
 import logging
 from datetime import datetime, timedelta
 
@@ -36,67 +37,79 @@ async def get_db() -> DatabaseService:
 
 @router.get("/", response_model=AnalyticsResponse)
 @router.get("", response_model=AnalyticsResponse)  # Handle both /analytics/ and /analytics
-async def get_analytics(db: DatabaseService = Depends(get_db)):
-    """Get dashboard analytics"""
+async def get_analytics(request: Request, db: DatabaseService = Depends(get_db)):
+    """Get dashboard analytics for authenticated user"""
     try:
-        # Get total conversations
+        # Get current user ID
+        user_id = get_current_user_id(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
+        # Get total conversations for this user
         total_conversations_result = await db.fetch_one(
-            "SELECT COUNT(*) as count FROM conversations"
+            "SELECT COUNT(*) as count FROM conversations WHERE user_id = $1",
+            user_id
         )
         total_conversations = total_conversations_result["count"] if total_conversations_result else 0
         
-        # Get AI vs customer messages
+        # Get AI vs customer messages for this user
         ai_messages_result = await db.fetch_one(
-            "SELECT COUNT(*) as count FROM conversations WHERE is_ai_response = true"
+            "SELECT COUNT(*) as count FROM conversations WHERE user_id = $1 AND is_ai_response = true",
+            user_id
         )
         ai_messages = ai_messages_result["count"] if ai_messages_result else 0
         customer_messages = total_conversations - ai_messages
         
-        # Get total orders
+        # Get total orders for this user
         total_orders_result = await db.fetch_one(
-            "SELECT COUNT(*) as count FROM orders"
+            "SELECT COUNT(*) as count FROM orders WHERE user_id = $1",
+            user_id
         )
         total_orders = total_orders_result["count"] if total_orders_result else 0
         
-        # Get total revenue
+        # Get total revenue for this user
         total_revenue_result = await db.fetch_one(
-            "SELECT COALESCE(SUM(total_amount), 0) as revenue FROM orders WHERE status != 'cancelled'"
+            "SELECT COALESCE(SUM(total_amount), 0) as revenue FROM orders WHERE user_id = $1 AND status != 'cancelled'",
+            user_id
         )
         total_revenue = float(total_revenue_result["revenue"]) if total_revenue_result else 0.0
         
         # Calculate average order value
         average_value = (total_revenue / total_orders) if total_orders > 0 else 0.0
         
-        # Get order status counts
+        # Get order status counts for this user
         pending_orders_result = await db.fetch_one(
-            "SELECT COUNT(*) as count FROM orders WHERE status IN ('pending', 'processing')"
+            "SELECT COUNT(*) as count FROM orders WHERE user_id = $1 AND status IN ('pending', 'processing')",
+            user_id
         )
         pending_orders = pending_orders_result["count"] if pending_orders_result else 0
         
         completed_orders_result = await db.fetch_one(
-            "SELECT COUNT(*) as count FROM orders WHERE status = 'completed'"
+            "SELECT COUNT(*) as count FROM orders WHERE user_id = $1 AND status = 'completed'",
+            user_id
         )
         completed_orders = completed_orders_result["count"] if completed_orders_result else 0
         
-        # Get catalog stats
+        # Get catalog stats for this user
         total_products_result = await db.fetch_one(
-            "SELECT COUNT(*) as count FROM catalog_items"
+            "SELECT COUNT(*) as count FROM catalog_items WHERE user_id = $1",
+            user_id
         )
         total_products = total_products_result["count"] if total_products_result else 0
         
-        active_products_result = await db.fetch_one(
-            "SELECT COUNT(*) as count FROM catalog_items WHERE is_active = true"
-        )
-        active_products = active_products_result["count"] if active_products_result else 0
+        # For now, assume all products are active since we don't have is_active column
+        active_products = total_products
         
         out_of_stock_result = await db.fetch_one(
-            "SELECT COUNT(*) as count FROM catalog_items WHERE stock_quantity = 0"
+            "SELECT COUNT(*) as count FROM catalog_items WHERE user_id = $1 AND stock_quantity = 0",
+            user_id
         )
         out_of_stock = out_of_stock_result["count"] if out_of_stock_result else 0
         
-        # Get recent orders
+        # Get recent orders for this user
         recent_orders_result = await db.fetch_all(
-            "SELECT id, customer_name, total_amount, status, created_at FROM orders ORDER BY created_at DESC LIMIT 5"
+            "SELECT id, customer, total_amount, status, created_at FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5",
+            user_id
         )
         
         recent_orders = []
@@ -104,7 +117,7 @@ async def get_analytics(db: DatabaseService = Depends(get_db)):
             for order in recent_orders_result:
                 recent_orders.append({
                     "id": order["id"],
-                    "customer_name": order["customer_name"],
+                    "customer_name": order["customer"],  # Map customer to customer_name for frontend
                     "total_amount": float(order["total_amount"]),
                     "status": order["status"],
                     "created_at": order["created_at"].isoformat() if order["created_at"] else "",

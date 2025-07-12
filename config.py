@@ -7,6 +7,12 @@ Environment variables and settings management - Simplified without pydantic-sett
 
 import os
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file (look in parent directory)
+# Only load .env file if not in production to avoid overriding Azure environment variables
+if os.getenv("ENVIRONMENT", "development").lower() != "production":
+    load_dotenv(dotenv_path="../.env", override=True)
 
 class Settings:
     """Simple settings class using environment variables"""
@@ -44,6 +50,7 @@ class Settings:
         
         # OpenAI Configuration
         self.OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+        self.OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o")
         self.OPENAI_API_VERSION: str = "2023-05-15"
         self.OPENAI_DEPLOYMENT_NAME: str = "gpt-4"
         self.OPENAI_EMBEDDING_DEPLOYMENT: str = "text-embedding-ada-002"
@@ -79,6 +86,14 @@ class Settings:
         # Rate Limiting
         self.RATE_LIMIT_REQUESTS: int = int(os.getenv("RATE_LIMIT_REQUESTS", "1000"))
         self.RATE_LIMIT_WINDOW: int = int(os.getenv("RATE_LIMIT_WINDOW", "3600"))  # 1 hour
+        
+        # Enterprise Security Configuration
+        self.ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "default-encryption-key-change-in-production")
+        self.SECRET_KEY: str = os.getenv("SECRET_KEY", "ig-shop-secret-key-2024")
+        self.ENABLE_RLS: bool = os.getenv("ENABLE_RLS", "true").lower() == "true"
+        self.ENABLE_AUDIT_LOGGING: bool = os.getenv("ENABLE_AUDIT_LOGGING", "true").lower() == "true"
+        self.DATA_RETENTION_DAYS: int = int(os.getenv("DATA_RETENTION_DAYS", "30"))
+        self.AUDIT_RETENTION_YEARS: int = int(os.getenv("AUDIT_RETENTION_YEARS", "7"))
         
         # CORS Configuration
         self.CORS_ORIGINS: list = [

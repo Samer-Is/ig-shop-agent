@@ -41,7 +41,7 @@ class DatabaseService:
                 min_size=1,
                 max_size=10,
                 command_timeout=60,
-                ssl='require' if settings.is_production else 'prefer'
+                ssl='require'  # Azure PostgreSQL requires SSL
             )
             
             # Test connection
@@ -150,6 +150,7 @@ class DatabaseService:
                 id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
                 instagram_handle TEXT UNIQUE NOT NULL,
                 instagram_user_id TEXT UNIQUE,
+                instagram_page_id TEXT,
                 instagram_access_token TEXT,
                 instagram_connected BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -164,6 +165,7 @@ class DatabaseService:
                 name TEXT NOT NULL,
                 price_jod DECIMAL(10,2) NOT NULL,
                 media_url TEXT NOT NULL DEFAULT '',
+                product_link TEXT DEFAULT '',
                 extras JSONB DEFAULT '{}',
                 description TEXT,
                 category TEXT,
@@ -200,6 +202,27 @@ class DatabaseService:
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
             
+            -- Business rules and configuration table
+            CREATE TABLE IF NOT EXISTS business_rules (
+                id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                business_name TEXT,
+                business_type TEXT,
+                working_hours TEXT,
+                delivery_info TEXT,
+                payment_methods TEXT,
+                return_policy TEXT,
+                terms_conditions TEXT,
+                contact_info TEXT,
+                custom_prompt TEXT,
+                ai_instructions TEXT,
+                language_preference TEXT DEFAULT 'en,ar',
+                response_tone TEXT DEFAULT 'professional',
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                UNIQUE(user_id)
+            );
+            
             -- Conversations table
             CREATE TABLE IF NOT EXISTS conversations (
                 id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -213,6 +236,34 @@ class DatabaseService:
             
             async with self.get_connection() as conn:
                 await conn.execute(schema_sql)
+            
+            # Add migration for instagram_page_id column if it doesn't exist
+            try:
+                async with self.get_connection() as conn:
+                    await conn.execute("""
+                        ALTER TABLE users 
+                        ADD COLUMN IF NOT EXISTS instagram_page_id TEXT;
+                    """)
+                logger.info("Migration: Added instagram_page_id column")
+            except Exception as e:
+                logger.warning(f"Migration warning (likely already exists): {e}")
+            
+            # Add sentiment and intent tracking columns for Phase 4 analytics
+            await self.execute_query("""
+                ALTER TABLE conversations 
+                ADD COLUMN IF NOT EXISTS sentiment VARCHAR(20),
+                ADD COLUMN IF NOT EXISTS intent VARCHAR(50),
+                ADD COLUMN IF NOT EXISTS products_mentioned TEXT[]
+            """)
+            logger.info("Migration: Added sentiment, intent, and products_mentioned columns")
+            
+            # Create indexes for better query performance
+            await self.execute_query("""
+                CREATE INDEX IF NOT EXISTS idx_conversations_sentiment ON conversations(sentiment);
+                CREATE INDEX IF NOT EXISTS idx_conversations_intent ON conversations(intent);
+                CREATE INDEX IF NOT EXISTS idx_conversations_user_customer ON conversations(user_id, customer);
+            """)
+            logger.info("Migration: Added indexes for conversation analytics")
             
             logger.info("Database schema initialized successfully")
             return True
