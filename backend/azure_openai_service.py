@@ -229,10 +229,18 @@ In your internal response, you must include the special tag: [NEEDS_HUMAN_ATTENT
             if context.get('sender_id'):
                 prompt += f"Customer ID: {context['sender_id']}\n"
             if context.get('page_id'):
-                prompt += f"Page ID: {context['page_id']}\n"
+                prompt += f"Instagram Page ID: {context['page_id']}\n"
             if context.get('conversation_history'):
                 prompt += f"Previous Messages: {len(context['conversation_history'])} messages in history\n"
-                
+        
+        # Add merchant Instagram page information
+        if business_rules and business_rules.get('business_name'):
+            prompt += f"\n[INSTAGRAM_PAGE_CONTEXT]\n"
+            prompt += f"You are responding as: {business_rules['business_name']}\n"
+            if context and context.get('page_id'):
+                prompt += f"Instagram Page ID: {context['page_id']}\n"
+            prompt += f"Remember: You represent {business_rules['business_name']} and should respond accordingly.\n"
+
         # Add conversation history details for context awareness
         if conversation_history:
             prompt += f"\n[CONVERSATION_HISTORY]\n"

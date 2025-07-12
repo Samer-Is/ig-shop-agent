@@ -3,6 +3,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from database import get_database, DatabaseService
 from azure_openai_service import get_openai_client
+from auth_middleware import get_current_user
 import logging
 import json
 import uuid
@@ -31,11 +32,15 @@ async def get_db() -> DatabaseService:
     return await get_database()
 
 @router.get("/", response_model=List[ConversationResponse])
-async def get_conversations(db: DatabaseService = Depends(get_db)):
-    """Get all conversations"""
+async def get_conversations(
+    current_user: dict = Depends(get_current_user),
+    db: DatabaseService = Depends(get_db)
+):
+    """Get all conversations for the current user"""
     try:
         conversations = await db.fetch_all(
-            "SELECT id, message as text, is_ai_response as ai_generated, created_at FROM conversations ORDER BY created_at DESC LIMIT 100"
+            "SELECT id, message as text, is_ai_response as ai_generated, created_at FROM conversations WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100",
+            current_user["id"]
         )
         return [ConversationResponse(
             id=conv["id"],
@@ -49,49 +54,48 @@ async def get_conversations(db: DatabaseService = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Failed to get conversations")
 
 @router.post("/ai/test-response", response_model=AITestResponse)
-async def test_ai_response(request: AITestRequest, db: DatabaseService = Depends(get_db)):
-    """Test AI response generation"""
+async def test_ai_response(
+    request: AITestRequest, 
+    current_user: dict = Depends(get_current_user),
+    db: DatabaseService = Depends(get_db)
+):
+    """Test AI response generation with proper multi-tenant isolation"""
     try:
-        # Get catalog items for context
+        # Get catalog items for CURRENT USER ONLY
         catalog_items = await db.fetch_all(
-            "SELECT name, description, price_jod, stock_quantity FROM catalog_items"
+            "SELECT name, description, price_jod, stock_quantity, product_link, category FROM catalog_items WHERE user_id = $1",
+            current_user["id"]
         )
         
-        # Build catalog context
-        catalog_context = "\n".join([
-            f"- {item['name']}: {item['description']} - {item['price_jod']} JOD (Stock: {item['stock_quantity']})"
-            for item in catalog_items
-        ])
+        # Get business rules for CURRENT USER ONLY
+        business_rules = await db.fetch_one(
+            "SELECT business_name, business_type, working_hours, delivery_info, payment_methods, return_policy, terms_conditions, contact_info, custom_prompt, ai_instructions, language_preference, response_tone FROM business_rules WHERE user_id = $1",
+            current_user["id"]
+        )
         
-        # Create system prompt
-        system_prompt = f"""You are a helpful shopping assistant for an Instagram store. 
-        You speak both English and Jordanian Arabic fluently.
+        # Get knowledge base items for CURRENT USER ONLY
+        knowledge_base = await db.fetch_all(
+            "SELECT title, content FROM kb_documents WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10",
+            current_user["id"]
+        )
         
-        Available products:
-        {catalog_context}
+        # Get conversation history for CURRENT USER ONLY (test customer)
+        conversation_history = await db.fetch_all(
+            "SELECT message, is_ai_response, created_at FROM conversations WHERE user_id = $1 AND customer = $2 ORDER BY created_at DESC LIMIT 20",
+            current_user["id"],
+            "test-customer"
+        )
         
-        Instructions:
-        1. Respond in the same language as the customer
-        2. Be helpful and friendly
-        3. Provide product recommendations when appropriate
-        4. If asked about products not in the catalog, politely say they're not available
-        5. For orders, collect: product name, quantity, customer name, phone, address
-        
-        Always analyze the customer's intent and respond appropriately."""
-        
-        # Get AI response
+        # Generate AI response with full context using the enhanced system
         openai_client = get_openai_client()
-        response = await openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": request.message}
-            ],
-            max_tokens=300,
-            temperature=0.7
+        ai_response = await openai_client.generate_response(
+            message=request.message,
+            catalog_items=catalog_items,
+            conversation_history=conversation_history,
+            customer_context={"sender_id": "test-customer", "page_id": current_user.get("instagram_page_id")},
+            business_rules=business_rules,
+            knowledge_base=knowledge_base
         )
-        
-        ai_response = response.choices[0].message.content
         
         # Analyze intent
         intent_analysis = {
@@ -114,14 +118,14 @@ async def test_ai_response(request: AITestRequest, db: DatabaseService = Depends
         elif any(word in request.message.lower() for word in ["available", "stock", "متوفر", "موجود"]):
             intent_analysis["intent"] = "stock_check"
         
-        # Save conversation
+        # Save conversation with CURRENT USER ID
         user_conv_id = str(uuid.uuid4())
         ai_conv_id = str(uuid.uuid4())
         
         await db.execute_query(
             "INSERT INTO conversations (id, user_id, customer, message, is_ai_response) VALUES ($1, $2, $3, $4, $5)",
             user_conv_id,
-            "default-user",  # TODO: Get from auth context
+            current_user["id"],  # Use actual user ID
             "test-customer",
             request.message,
             False
@@ -130,7 +134,7 @@ async def test_ai_response(request: AITestRequest, db: DatabaseService = Depends
         await db.execute_query(
             "INSERT INTO conversations (id, user_id, customer, message, is_ai_response) VALUES ($1, $2, $3, $4, $5)",
             ai_conv_id,
-            "default-user",  # TODO: Get from auth context
+            current_user["id"],  # Use actual user ID
             "test-customer",
             ai_response,
             True

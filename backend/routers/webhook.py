@@ -206,11 +206,41 @@ async def process_messaging_event(event: Dict[str, Any], page_id: str, db: Datab
 async def get_merchant_by_page_id(page_id: str, db: DatabaseService) -> Optional[Dict[str, Any]]:
     """Get merchant data by Instagram page ID"""
     try:
-        # For now, use the default user. In production, store page_id mapping
+        # First try to find merchant by exact page_id match
         merchant = await db.fetch_one(
-            "SELECT * FROM users WHERE instagram_connected = true LIMIT 1"
+            "SELECT * FROM users WHERE instagram_page_id = $1 AND instagram_connected = true",
+            page_id
         )
-        return merchant
+        
+        if merchant:
+            logger.info(f"Found merchant by page_id: {page_id} -> user_id: {merchant['id']}")
+            return merchant
+        
+        # If no exact match, try to find by checking if page_id is stored in instagram_user_id
+        merchant = await db.fetch_one(
+            "SELECT * FROM users WHERE instagram_user_id = $1 AND instagram_connected = true",
+            page_id
+        )
+        
+        if merchant:
+            logger.info(f"Found merchant by instagram_user_id: {page_id} -> user_id: {merchant['id']}")
+            return merchant
+        
+        # If still no match, log all connected users for debugging
+        all_connected = await db.fetch_all(
+            "SELECT id, email, instagram_page_id, instagram_user_id, instagram_connected FROM users WHERE instagram_connected = true"
+        )
+        
+        logger.warning(f"No merchant found for page_id: {page_id}")
+        logger.warning(f"Available connected users: {all_connected}")
+        
+        # As a fallback, return the first connected user but log this as an issue
+        if all_connected:
+            logger.warning(f"Using fallback: first connected user {all_connected[0]['id']} for page_id {page_id}")
+            return all_connected[0]
+        
+        return None
+        
     except Exception as e:
         logger.error(f"Error getting merchant by page_id {page_id}: {e}")
         return None

@@ -150,6 +150,7 @@ class DatabaseService:
                 id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
                 instagram_handle TEXT UNIQUE NOT NULL,
                 instagram_user_id TEXT UNIQUE,
+                instagram_page_id TEXT,
                 instagram_access_token TEXT,
                 instagram_connected BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -235,6 +236,17 @@ class DatabaseService:
             
             async with self.get_connection() as conn:
                 await conn.execute(schema_sql)
+            
+            # Add migration for instagram_page_id column if it doesn't exist
+            try:
+                async with self.get_connection() as conn:
+                    await conn.execute("""
+                        ALTER TABLE users 
+                        ADD COLUMN IF NOT EXISTS instagram_page_id TEXT;
+                    """)
+                logger.info("Migration: Added instagram_page_id column")
+            except Exception as e:
+                logger.warning(f"Migration warning (likely already exists): {e}")
             
             logger.info("Database schema initialized successfully")
             return True
