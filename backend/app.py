@@ -20,7 +20,15 @@ from database_service_rls import get_enterprise_database, init_enterprise_databa
 from auth_middleware import AuthMiddleware
 from rate_limiting_middleware import EnterpriseRateLimitingMiddleware
 
-# Import routers
+# Logging configuration
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Import routers with error handling
 try:
     from routers import auth, conversations, orders, catalog, kb, webhook, analytics, business
     routers_imported = True
@@ -30,12 +38,7 @@ except Exception as e:
     import_error = str(e)
     logger.error(f"Failed to import routers: {e}")
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+
 
 # Security
 security = HTTPBearer()
