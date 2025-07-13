@@ -40,6 +40,12 @@ class Settings:
         self.OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
         self.OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", None)
         
+        # Azure OpenAI Configuration
+        self.AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
+        self.AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
+        self.AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt4o")
+        self.USE_AZURE_OPENAI = os.getenv("USE_AZURE_OPENAI", "true").lower() == "true"
+        
         # Azure Services
         self.AZURE_KEY_VAULT_URL = os.getenv("AZURE_KEY_VAULT_URL", "")
         self.AZURE_TENANT_ID = os.getenv("AZURE_TENANT_ID", "")

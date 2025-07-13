@@ -106,9 +106,9 @@ async def health_check():
             status_code=503,
             content={
                 "status": "unhealthy",
-                "service": "ig-shop-agent-backend",
-                "error": str(e)
-            }
+            "service": "ig-shop-agent-backend",
+            "error": str(e)
+        }
         )
 
 # Include routers

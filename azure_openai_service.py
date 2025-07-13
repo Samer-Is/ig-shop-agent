@@ -6,7 +6,7 @@ Enhanced with Phase 5.1 Order Entity Recognition
 import json
 import logging
 from typing import List, Dict, Any, Optional
-from openai import OpenAI
+from openai import OpenAI, AzureOpenAI
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -16,13 +16,22 @@ class AzureOpenAIService:
     
     def __init__(self):
         try:
-            # Initialize OpenAI client
-            self.client = OpenAI(
-                api_key=settings.OPENAI_API_KEY,
-                base_url=getattr(settings, 'OPENAI_BASE_URL', None)
-            )
-            self.model = getattr(settings, 'OPENAI_MODEL', 'gpt-4o')
-            logger.info(f"AI service initialized successfully using model: {self.model}")
+            # Initialize OpenAI client (Azure or regular)
+            if getattr(settings, 'USE_AZURE_OPENAI', True) and settings.AZURE_OPENAI_ENDPOINT:
+                self.client = AzureOpenAI(
+                    api_key=settings.AZURE_OPENAI_API_KEY,
+                    azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                    api_version="2024-02-01"
+                )
+                self.model = settings.AZURE_OPENAI_DEPLOYMENT
+                logger.info(f"Azure OpenAI service initialized successfully using deployment: {self.model}")
+            else:
+                self.client = OpenAI(
+                    api_key=settings.OPENAI_API_KEY,
+                    base_url=getattr(settings, 'OPENAI_BASE_URL', None)
+                )
+                self.model = getattr(settings, 'OPENAI_MODEL', 'gpt-4o')
+                logger.info(f"Regular OpenAI service initialized successfully using model: {self.model}")
         except Exception as e:
             logger.error(f"Failed to initialize AI service: {e}")
             raise

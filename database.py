@@ -303,4 +303,4 @@ async def close_database() -> None:
 
 async def get_db() -> DatabaseService:
     """FastAPI dependency for database access"""
-    return await get_database() 
+    return await get_database()

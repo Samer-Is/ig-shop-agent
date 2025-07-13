@@ -44,8 +44,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             try:
                 from config import settings
                 if settings.ENVIRONMENT == "production":
-                    enterprise_db = await get_enterprise_database()
-                    await enterprise_db.set_user_context(user_info['id'])
+                enterprise_db = await get_enterprise_database()
+                await enterprise_db.set_user_context(user_info['id'])
             except Exception as e:
                 logger.warning(f"Failed to set enterprise DB user context: {e}")
         
