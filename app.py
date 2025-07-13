@@ -98,7 +98,7 @@ async def health_check():
         return {
             "status": "healthy",
             "service": "ig-shop-agent-backend",
-            "version": "1.0.1",
+            "version": "1.0.2",
             "environment": getattr(settings, 'ENVIRONMENT', 'development'),
             "instagram_oauth": "configured" if settings.INSTAGRAM_APP_ID else "not_configured",
             "message": "Instagram OAuth not configured - please set META_APP_ID and META_APP_SECRET environment variables" if not settings.INSTAGRAM_APP_ID else "All systems operational",
